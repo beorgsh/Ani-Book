@@ -108,7 +108,10 @@ export default function SidebarLeft({
         </div>
 
         {/* Current User Card */}
-        <div className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-100/80 cursor-pointer transition-colors duration-150">
+        <div 
+          onClick={() => handleTabClick("feed")}
+          className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-100/80 cursor-pointer transition-colors duration-150"
+        >
           <img
             src={currentUser.avatar}
             alt={currentUser.name}

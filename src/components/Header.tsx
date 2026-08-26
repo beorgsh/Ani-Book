@@ -7,6 +7,7 @@ interface HeaderProps {
   currentUser: { name: string; avatar: string };
   isSidebarOpen: boolean;
   onToggleSidebar: () => void;
+  onLogoClick?: () => void;
 }
 
 export default function Header({
@@ -14,7 +15,8 @@ export default function Header({
   setSearchQuery,
   currentUser,
   isSidebarOpen,
-  onToggleSidebar
+  onToggleSidebar,
+  onLogoClick
 }: HeaderProps) {
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
@@ -89,7 +91,11 @@ export default function Header({
         </button>
 
         {/* AniBook Brand Name */}
-        <div className="flex items-center gap-2 select-none cursor-pointer">
+        <div 
+          onClick={onLogoClick} 
+          className="flex items-center gap-2 select-none cursor-pointer hover:opacity-90 transition-opacity"
+          title="AniBook Home Feed"
+        >
           <span className="font-sans font-black tracking-tight text-xl sm:text-2xl text-[#1877F2]">
             AniBook
           </span>

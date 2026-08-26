@@ -1,5 +1,148 @@
 import express from "express";
 
+// Helper to parse any timestamp string into canonical 00:00:00.000 format
+function formatVttTimestamp(raw: string): string {
+  const clean = raw.trim().replace(",", ".");
+  const parts = clean.split(":");
+
+  let hours = 0;
+  let mins = 0;
+  let secs = 0;
+  let millis = 0;
+
+  if (parts.length === 3) {
+    hours = parseInt(parts[0], 10) || 0;
+    mins = parseInt(parts[1], 10) || 0;
+    const secParts = parts[2].split(".");
+    secs = parseInt(secParts[0], 10) || 0;
+    millis = parseInt((secParts[1] || "0").padEnd(3, "0").slice(0, 3), 10) || 0;
+  } else if (parts.length === 2) {
+    mins = parseInt(parts[0], 10) || 0;
+    const secParts = parts[1].split(".");
+    secs = parseInt(secParts[0], 10) || 0;
+    millis = parseInt((secParts[1] || "0").padEnd(3, "0").slice(0, 3), 10) || 0;
+    if (mins >= 60) {
+      hours = Math.floor(mins / 60);
+      mins = mins % 60;
+    }
+  } else {
+    const secParts = clean.split(".");
+    const totalSecs = parseInt(secParts[0], 10) || 0;
+    hours = Math.floor(totalSecs / 3600);
+    mins = Math.floor((totalSecs % 3600) / 60);
+    secs = totalSecs % 60;
+    millis = parseInt((secParts[1] || "0").padEnd(3, "0").slice(0, 3), 10) || 0;
+  }
+
+  const hStr = String(hours).padStart(2, "0");
+  const mStr = String(mins).padStart(2, "0");
+  const sStr = String(secs).padStart(2, "0");
+  const msStr = String(millis).padStart(3, "0");
+
+  return `${hStr}:${mStr}:${sStr}.${msStr}`;
+}
+
+// Converts any SRT / malformed VTT / raw subtitle text into strictly valid, error-free WebVTT format
+function sanitizeToWebVTT(rawText: string): string {
+  if (!rawText || typeof rawText !== "string") {
+    return "WEBVTT\n\n";
+  }
+
+  // Remove UTF-8 BOM if present
+  let text = rawText.replace(/^\uFEFF/, "");
+
+  // Detect upstream HTML or XML error pages
+  const lower = text.toLowerCase();
+  if (
+    lower.includes("<!doctype") ||
+    lower.includes("<html") ||
+    lower.includes("<body") ||
+    lower.includes("<head") ||
+    (lower.includes("<b>connection") && !lower.includes("-->")) ||
+    (lower.includes("error") && !lower.includes("-->"))
+  ) {
+    return "WEBVTT\n\n";
+  }
+
+  // Normalize all line breaks to \n
+  const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+
+  // Regex matching timestamp lines (e.g. "00:01:23,450 --> 00:01:25,670" or "01:23.450 -> 01:25.670 align:center")
+  const timestampRegex = /((?:\d{1,2}:)?\d{1,2}:\d{2}[.,]\d{1,3})\s*(?:-->|->)\s*((?:\d{1,2}:)?\d{1,2}:\d{2}[.,]\d{1,3})(.*)/;
+
+  interface Cue {
+    start: string;
+    end: string;
+    settings: string;
+    payload: string[];
+  }
+
+  const cues: Cue[] = [];
+  let currentCue: Cue | null = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const trimmed = rawLine.trim();
+
+    // Skip WEBVTT header line, NOTE comments, or STYLE blocks
+    if (trimmed.startsWith("WEBVTT") || trimmed.startsWith("NOTE") || trimmed.startsWith("STYLE")) {
+      continue;
+    }
+
+    const match = trimmed.match(timestampRegex);
+    if (match) {
+      if (currentCue) {
+        // Strip any trailing integer line number from payload (leftover from previous cue identifier)
+        while (currentCue.payload.length > 0 && /^\d+$/.test(currentCue.payload[currentCue.payload.length - 1].trim())) {
+          currentCue.payload.pop();
+        }
+        if (currentCue.payload.length > 0) {
+          cues.push(currentCue);
+        }
+      }
+
+      const start = formatVttTimestamp(match[1]);
+      const end = formatVttTimestamp(match[2]);
+      const settings = (match[3] || "").trim();
+
+      currentCue = {
+        start,
+        end,
+        settings,
+        payload: []
+      };
+    } else if (currentCue) {
+      if (trimmed.length > 0) {
+        currentCue.payload.push(trimmed);
+      }
+    }
+  }
+
+  // Add final cue
+  if (currentCue) {
+    while (currentCue.payload.length > 0 && /^\d+$/.test(currentCue.payload[currentCue.payload.length - 1].trim())) {
+      currentCue.payload.pop();
+    }
+    if (currentCue.payload.length > 0) {
+      cues.push(currentCue);
+    }
+  }
+
+  if (cues.length === 0) {
+    return "WEBVTT\n\n";
+  }
+
+  // Construct perfectly structured WebVTT with explicit \n\n cue boundaries and numeric identifiers
+  const output: string[] = ["WEBVTT\n"];
+  cues.forEach((cue, idx) => {
+    const timeLine = cue.settings ? `${cue.start} --> ${cue.end} ${cue.settings}` : `${cue.start} --> ${cue.end}`;
+    const cueBody = cue.payload.join("\n");
+    output.push(`${idx + 1}\n${timeLine}\n${cueBody}\n`);
+  });
+
+  return output.join("\n");
+}
+
 export function createApiApp() {
   const app = express();
 
@@ -500,12 +643,18 @@ export function createApiApp() {
 
   // M3U8 Playlist & Media Segment Proxy with CORS and Referer header
   app.get("/api/m3u8-proxy", async (req, res) => {
-    try {
-      const streamUrl = req.query.url as string;
-      if (!streamUrl) {
-        return res.status(400).send("Missing url query param");
-      }
+    const streamUrl = req.query.url as string;
+    const isSubtitleRequest = typeof streamUrl === "string" && (streamUrl.includes(".vtt") || streamUrl.includes(".srt") || streamUrl.includes("subtitle"));
 
+    if (!streamUrl) {
+      if (isSubtitleRequest) {
+        res.setHeader("Content-Type", "text/vtt; charset=utf-8");
+        return res.send("WEBVTT\n\n");
+      }
+      return res.status(400).send("Missing url query param");
+    }
+
+    try {
       // Prepare request headers, including client's Range header if requested
       const fetchHeaders: Record<string, string> = {
         "Referer": "https://megaplay.buzz/",
@@ -523,6 +672,11 @@ export function createApiApp() {
       });
 
       if (!response.ok && response.status !== 206) {
+        if (isSubtitleRequest) {
+          res.setHeader("Content-Type", "text/vtt; charset=utf-8");
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          return res.send("WEBVTT\n\n");
+        }
         return res.status(response.status).send(`Failed upstream fetch (${response.status})`);
       }
 
@@ -593,19 +747,13 @@ export function createApiApp() {
       if (buf.length > 0 && buf[0] === 0x47) {
         // Detected MPEG Transport Stream sync byte (0x47) disguised as .jpg/.html/.js
         res.setHeader("Content-Type", "video/mp2t");
-      } else if (streamUrl.endsWith(".vtt") || contentType.includes("vtt")) {
+      } else if (isSubtitleRequest || streamUrl.endsWith(".vtt") || streamUrl.endsWith(".srt") || contentType.includes("vtt") || contentType.includes("subrip") || contentType.includes("text/plain")) {
         res.setHeader("Content-Type", "text/vtt; charset=utf-8");
-        let vttText = buf.toString("utf-8");
-        // Ensure standard WEBVTT header
-        if (!vttText.trimStart().startsWith("WEBVTT")) {
-          vttText = "WEBVTT\n\n" + vttText.replace(/^([0-9]+\r?\n)/, "");
-        }
-        // Normalize SRT comma timestamps (00:00:00,000 -> 00:00:00.000)
-        vttText = vttText.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2");
-        // Normalize 2-segment timestamps (MM:SS.mmm -> 00:MM:SS.mmm)
-        vttText = vttText.replace(/(^|\n)(\d{2}:\d{2}\.\d{3})\s*-->\s*(\d{2}:\d{2}\.\d{3})/g, "$100:$2 --> 00:$3");
-        res.setHeader("Cache-Control", "public, max-age=31536000");
-        return res.send(vttText);
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        
+        const textContent = buf.toString("utf-8");
+        const sanitizedVtt = sanitizeToWebVTT(textContent);
+        return res.send(sanitizedVtt);
       } else if (contentType) {
         res.setHeader("Content-Type", contentType);
       } else {
@@ -615,6 +763,11 @@ export function createApiApp() {
 
       return res.send(buf);
     } catch (err: any) {
+      if (isSubtitleRequest) {
+        res.setHeader("Content-Type", "text/vtt; charset=utf-8");
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        return res.send("WEBVTT\n\n");
+      }
       console.warn("[M3U8 PROXY ERROR]", err);
       return res.status(500).send(err.message || "M3U8 proxy error");
     }

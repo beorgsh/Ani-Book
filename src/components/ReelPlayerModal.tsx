@@ -788,26 +788,15 @@ function SingleReelCard({
         className="relative w-full h-full flex items-center justify-center overflow-hidden cursor-pointer bg-gray-950"
         onClick={togglePlay}
       >
-        {/* Unified Stable Poster & Ambient Backdrop (Visible smoothly without flashing on swipe) */}
-        <div className="absolute inset-0 z-0 overflow-hidden bg-gray-950 pointer-events-none">
+        {/* Clean Blurred Poster Backdrop (Ambient Background) */}
+        <div className="absolute inset-0 z-0 overflow-hidden bg-gray-950 pointer-events-none select-none">
           <div 
-            className="absolute inset-0 blur-3xl opacity-50 scale-125"
+            className="absolute inset-0 bg-cover bg-center blur-2xl opacity-60 scale-110"
             style={{
               backgroundImage: `url(${posterUrl})`,
-              backgroundSize: "cover",
-              backgroundPosition: "center"
             }}
           />
-          <img
-            src={posterUrl}
-            alt={reel.title}
-            className={`w-full h-full object-cover sm:object-contain transition-opacity duration-300 ${
-              isVideoReady && isActive ? "opacity-0" : "opacity-100"
-            }`}
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = FALLBACK_POSTER;
-            }}
-          />
+          <div className="absolute inset-0 bg-black/30" />
         </div>
 
         {/* Preloaded/Active Video.js Player Node */}

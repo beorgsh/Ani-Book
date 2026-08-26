@@ -7,6 +7,7 @@ import PostCard from "./components/PostCard";
 import ReelsSection from "./components/ReelsSection";
 import FeedSkeleton from "./components/FeedSkeleton";
 import FacebookPhotoModal from "./components/FacebookPhotoModal";
+import ExitConfirmModal from "./components/ExitConfirmModal";
 import { Post, Comment, ApiResponse, AnimeItem, AnimeEpisode } from "./types";
 import { Sparkles, RefreshCw, AlertTriangle, Shuffle, Clock, Compass } from "lucide-react";
 
@@ -118,12 +119,34 @@ export default function App() {
   const [selectedPhotoPost, setSelectedPhotoPost] = useState<Post | null>(null);
   const [selectedEpisodeForModal, setSelectedEpisodeForModal] = useState<AnimeEpisode | null>(null);
 
+  // App Exit Confirmation Modal state
+  const [showExitModal, setShowExitModal] = useState<boolean>(false);
+
   const [currentUser] = useState({
     name: "Otaku Explorer",
     avatar: getStoredUserAvatar(),
   });
 
   const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // State refs to ensure popstate listener always accesses freshest values without stale closures
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+
+  const isSidebarOpenRef = useRef(isSidebarOpen);
+  isSidebarOpenRef.current = isSidebarOpen;
+
+  const selectedPhotoPostRef = useRef(selectedPhotoPost);
+  selectedPhotoPostRef.current = selectedPhotoPost;
+
+  const selectedGenreRef = useRef(selectedGenre);
+  selectedGenreRef.current = selectedGenre;
+
+  const searchQueryRef = useRef(searchQuery);
+  searchQueryRef.current = searchQuery;
+
+  const showExitModalRef = useRef(showExitModal);
+  showExitModalRef.current = showExitModal;
 
   // Show temporary toast alert
   const triggerToast = (msg: string) => {
@@ -347,6 +370,111 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  // Tab change handler with history recording
+  const handleTabChange = useCallback((newTab: "feed" | "latest") => {
+    if (newTab === activeTabRef.current) {
+      if (newTab === "feed") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        handleShuffleFeed();
+      }
+      return;
+    }
+    setActiveTab(newTab);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    try {
+      window.history.pushState({ anibook_tab: newTab }, "");
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Browser / Hardware Back Navigation & Exit Confirmation Interceptor
+  useEffect(() => {
+    try {
+      // Initialize base root history state
+      window.history.replaceState({ anibook_root: true, anibook_tab: "feed" }, "");
+      // Push history barrier entry so first back press triggers popstate rather than exiting browser immediately
+      window.history.pushState({ anibook_page: "feed", anibook_tab: "feed" }, "");
+    } catch {
+      // ignore
+    }
+
+    const handlePopState = () => {
+      // 1. If Exit Confirmation Modal is already visible, dismiss it
+      if (showExitModalRef.current) {
+        setShowExitModal(false);
+        return;
+      }
+
+      // 2. If photo lightbox modal is open, its own popstate handler handles closing it
+      if (selectedPhotoPostRef.current) {
+        return;
+      }
+
+      // 3. If mobile sidebar is open, close sidebar
+      if (isSidebarOpenRef.current && window.innerWidth < 1024) {
+        setIsSidebarOpen(false);
+        try {
+          window.history.pushState({ anibook_page: activeTabRef.current, anibook_tab: activeTabRef.current }, "");
+        } catch {}
+        return;
+      }
+
+      // 4. If an active genre or search filter is set, clear it first
+      if (selectedGenreRef.current) {
+        setSelectedGenre("");
+        try {
+          window.history.pushState({ anibook_page: activeTabRef.current, anibook_tab: activeTabRef.current }, "");
+        } catch {}
+        return;
+      }
+      if (searchQueryRef.current) {
+        setSearchQuery("");
+        try {
+          window.history.pushState({ anibook_page: activeTabRef.current, anibook_tab: activeTabRef.current }, "");
+        } catch {}
+        return;
+      }
+
+      // 5. If user is currently on 'latest' tab, back navigation returns to 'feed' (the default tab)
+      if (activeTabRef.current === "latest") {
+        setActiveTab("feed");
+        try {
+          window.history.pushState({ anibook_page: "feed", anibook_tab: "feed" }, "");
+        } catch {}
+        return;
+      }
+
+      // 6. If user is on 'feed' (the default root view) and there are no other views/modals to go back to:
+      // Show the exit confirmation modal
+      setShowExitModal(true);
+      try {
+        // Re-push barrier state so the web app doesn't close abruptly while the user decides in the modal
+        window.history.pushState({ anibook_page: "feed", anibook_tab: "feed" }, "");
+      } catch {}
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, []);
+
+  // Handle explicit confirmation to exit AniBook
+  const handleConfirmExit = () => {
+    setShowExitModal(false);
+    triggerToast("Exiting AniBook...");
+    try {
+      if (window.history.length > 2) {
+        window.history.go(-2);
+      } else {
+        window.close();
+      }
+    } catch {
+      window.location.href = "about:blank";
+    }
+  };
 
   // Handler to manually randomize / shuffle feed
   const handleShuffleFeed = async () => {
@@ -594,6 +722,7 @@ export default function App() {
         currentUser={currentUser}
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+        onLogoClick={() => handleTabChange("feed")}
       />
 
       {/* Main Centered Content Layout */}
@@ -605,7 +734,7 @@ export default function App() {
           selectedGenre={selectedGenre}
           setSelectedGenre={setSelectedGenre}
           activeTab={activeTab}
-          setActiveTab={setActiveTab}
+          setActiveTab={handleTabChange}
           onRefreshFeed={handleShuffleFeed}
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
@@ -761,6 +890,13 @@ export default function App() {
           initialEpisode={selectedEpisodeForModal}
         />
       )}
+
+      {/* Exit Confirmation Modal */}
+      <ExitConfirmModal
+        isOpen={showExitModal}
+        onClose={() => setShowExitModal(false)}
+        onConfirmExit={handleConfirmExit}
+      />
 
       {/* Floating Micro Toast notification */}
       {toastMessage && (
