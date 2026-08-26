@@ -31,6 +31,10 @@ import {
   saveReelSettings, 
   ReelSettings 
 } from "./utils/reelSettings";
+import { 
+  initDarkMode, 
+  setStoredDarkMode 
+} from "./utils/darkMode";
 
 // Fisher-Yates array shuffle algorithm
 function shuffleArray<T>(array: T[]): T[] {
@@ -135,6 +139,16 @@ export default function App() {
   // Reel Video Settings state (saved in localStorage / cookies)
   const [reelSettings, setReelSettings] = useState<ReelSettings>(() => getReelSettings());
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
+
+  // Dark Mode Cookie State
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => initDarkMode());
+
+  const handleToggleDarkMode = () => {
+    const nextMode = !isDarkMode;
+    setIsDarkMode(nextMode);
+    setStoredDarkMode(nextMode);
+    triggerToast(nextMode ? "🌙 Dark mode enabled (saved in cookies)" : "☀️ Light mode enabled (saved in cookies)");
+  };
 
   const handleUpdateReelSettings = (newSettings: ReelSettings) => {
     setReelSettings(newSettings);
@@ -923,7 +937,7 @@ export default function App() {
   });
 
   return (
-    <div className="min-h-screen bg-[#F0F2F5] text-gray-900 font-sans flex flex-col w-full overflow-x-hidden">
+    <div className="min-h-screen bg-[#F0F2F5] dark:bg-[#0b0f17] text-gray-900 dark:text-gray-100 font-sans flex flex-col w-full overflow-x-hidden transition-colors duration-200">
       {/* Top Header Navigation (AniBook, Search, Avatar, Sidebar Toggle, Settings) */}
       <Header
         searchQuery={searchQuery}
@@ -934,6 +948,8 @@ export default function App() {
         onLogoClick={() => handleTabChange("feed")}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         onTabSelect={handleTabChange}
+        isDarkMode={isDarkMode}
+        onToggleDarkMode={handleToggleDarkMode}
       />
 
       {/* Main Centered Content Layout */}
@@ -1236,6 +1252,8 @@ export default function App() {
             onUpdateReelSettings={handleUpdateReelSettings}
             onRefreshFeed={handleShuffleFeed}
             currentUser={currentUser}
+            isDarkMode={isDarkMode}
+            onToggleDarkMode={handleToggleDarkMode}
           />
         )}
       </AnimatePresence>

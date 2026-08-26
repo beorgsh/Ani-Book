@@ -59,13 +59,13 @@ export default function CreatePost({ currentUser, onSubmitPost }: CreatePostProp
   };
 
   return (
-    <div className="w-full max-w-full bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 min-w-0 box-border" id="create-post-container">
+    <div className="w-full max-w-full bg-white dark:bg-[#161b22] text-gray-900 dark:text-gray-100 rounded-2xl shadow-sm border border-gray-200 dark:border-[#30363d] p-3 sm:p-4 min-w-0 box-border" id="create-post-container">
       {/* Mini Top Row */}
       <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
         <img
           src={currentUser.avatar}
           alt={currentUser.name}
-          className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-gray-100 shrink-0"
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-gray-100 dark:border-[#30363d] shrink-0"
           referrerPolicy="no-referrer"
           onError={(e) => {
             (e.target as HTMLImageElement).src = "https://api.dicebear.com/9.x/adventurer/svg?seed=OtakuExplorer_MainUser&backgroundColor=b6e3f4";
@@ -73,19 +73,19 @@ export default function CreatePost({ currentUser, onSubmitPost }: CreatePostProp
         />
         <button
           onClick={() => setIsOpen(true)}
-          className="flex-1 bg-[#F0F2F5] hover:bg-[#E4E6EB] text-left text-gray-500 rounded-full h-9 sm:h-10 px-3.5 sm:px-4 text-xs sm:text-sm font-medium transition-colors duration-150 cursor-pointer min-w-0 truncate"
+          className="flex-1 bg-[#F0F2F5] dark:bg-[#21262d] hover:bg-[#E4E6EB] dark:hover:bg-[#30363d] text-left text-gray-500 dark:text-gray-300 rounded-full h-9 sm:h-10 px-3.5 sm:px-4 text-xs sm:text-sm font-medium transition-colors duration-150 cursor-pointer min-w-0 truncate"
         >
           What's on your mind, {currentUser.name.split(" ")[0]}?
         </button>
       </div>
 
-      <div className="h-[1px] bg-gray-100 my-2.5 sm:my-3" />
+      <div className="h-[1px] bg-gray-100 dark:bg-[#30363d] my-2.5 sm:my-3" />
 
       {/* Mini Quick-actions Row */}
-      <div className="flex items-center justify-between text-xs sm:text-sm text-gray-600 font-semibold min-w-0 gap-1">
+      <div className="flex items-center justify-between text-xs sm:text-sm text-gray-600 dark:text-gray-300 font-semibold min-w-0 gap-1">
         <button
           onClick={() => setIsOpen(true)}
-          className="flex items-center justify-center gap-1.5 sm:gap-2 flex-1 py-1.5 sm:py-2 rounded-xl hover:bg-gray-100 transition-colors duration-150 cursor-pointer min-w-0"
+          className="flex items-center justify-center gap-1.5 sm:gap-2 flex-1 py-1.5 sm:py-2 rounded-xl hover:bg-gray-100 dark:hover:bg-[#21262d] transition-colors duration-150 cursor-pointer min-w-0"
         >
           <Video className="h-4 w-4 sm:h-5 sm:w-5 text-red-500 shrink-0" />
           <span className="truncate">Live Video</span>
@@ -95,14 +95,14 @@ export default function CreatePost({ currentUser, onSubmitPost }: CreatePostProp
             setIsOpen(true);
             setShowImageInput(true);
           }}
-          className="flex items-center justify-center gap-1.5 sm:gap-2 flex-1 py-1.5 sm:py-2 rounded-xl hover:bg-gray-100 transition-colors duration-150 cursor-pointer min-w-0"
+          className="flex items-center justify-center gap-1.5 sm:gap-2 flex-1 py-1.5 sm:py-2 rounded-xl hover:bg-gray-100 dark:hover:bg-[#21262d] transition-colors duration-150 cursor-pointer min-w-0"
         >
           <Image className="h-4 w-4 sm:h-5 sm:w-5 text-green-500 shrink-0" />
           <span className="truncate">Photo/Video</span>
         </button>
         <button
           onClick={() => setIsOpen(true)}
-          className="flex items-center justify-center gap-1.5 sm:gap-2 flex-1 py-1.5 sm:py-2 rounded-xl hover:bg-gray-100 transition-colors duration-150 cursor-pointer min-w-0"
+          className="flex items-center justify-center gap-1.5 sm:gap-2 flex-1 py-1.5 sm:py-2 rounded-xl hover:bg-gray-100 dark:hover:bg-[#21262d] transition-colors duration-150 cursor-pointer min-w-0"
         >
           <Smile className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-500 shrink-0" />
           <span className="truncate">Feeling</span>
@@ -112,13 +112,13 @@ export default function CreatePost({ currentUser, onSubmitPost }: CreatePostProp
       {/* Creation Modal (Facebook Styled Overlay) */}
       {isOpen && (
         <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 p-4 animate-fade-in">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="bg-white dark:bg-[#161b22] text-gray-900 dark:text-gray-100 w-full max-w-lg rounded-2xl shadow-2xl border border-gray-200 dark:border-[#30363d] overflow-hidden flex flex-col max-h-[90vh]">
             {/* Modal Header */}
-            <div className="relative flex items-center justify-center h-14 border-b border-gray-100 px-4">
-              <h3 className="font-bold text-gray-900 text-lg">Create Post</h3>
+            <div className="relative flex items-center justify-center h-14 border-b border-gray-100 dark:border-[#30363d] px-4">
+              <h3 className="font-bold text-gray-900 dark:text-white text-lg">Create Post</h3>
               <button
                 onClick={() => setIsOpen(false)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 transition-colors cursor-pointer"
+                className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-[#21262d] hover:bg-gray-200 dark:hover:bg-[#30363d] text-gray-500 dark:text-gray-300 transition-colors cursor-pointer"
               >
                 <X className="h-4.5 w-4.5" />
               </button>

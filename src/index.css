@@ -1,1 +1,110 @@
 @import "tailwindcss";
+
+@layer base {
+  /* ALWAYS enforce dark/black backgrounds for body, header, main content, cards and containers */
+  html, body, #root, main {
+    background-color: #0d1117 !important;
+    color: #f0f6fc;
+  }
+
+  /* Header is ALWAYS black */
+  header, #anibook-header {
+    background-color: #161b22 !important;
+    border-color: #30363d !important;
+    color: #f0f6fc !important;
+  }
+
+  /* Main background is ALWAYS dark */
+  .bg-\[\#F0F2F5\] {
+    background-color: #0d1117 !important;
+  }
+
+  /* Cards, modals, sidebars and containers are ALWAYS dark/black */
+  .bg-white,
+  .bg-gray-50,
+  .bg-gray-50\/80,
+  .bg-gray-50\/70,
+  .bg-gray-100,
+  aside,
+  #toggleable-sidebar-left {
+    background-color: #161b22 !important;
+    border-color: #30363d !important;
+  }
+
+  .border-gray-100,
+  .border-gray-200,
+  .border-gray-200\/80,
+  .border-gray-200\/90 {
+    border-color: #30363d !important;
+  }
+
+  /* Inputs and textareas */
+  input, textarea, select {
+    background-color: #21262d !important;
+    color: #f0f6fc !important;
+    border-color: #30363d !important;
+  }
+
+  /* Mode toggling ONLY changes text colors and text contrast */
+  html:not(.dark) {
+    color-scheme: dark;
+    color: #c9d1d9;
+  }
+
+  html:not(.dark) .text-gray-900,
+  html:not(.dark) .text-gray-800,
+  html:not(.dark) .text-gray-950 {
+    color: #e6edf3 !important;
+  }
+
+  html:not(.dark) .text-gray-700,
+  html:not(.dark) .text-gray-600,
+  html:not(.dark) .text-gray-500 {
+    color: #8b949e !important;
+  }
+
+  html.dark {
+    color-scheme: dark;
+    color: #ffffff;
+  }
+
+  html.dark .text-gray-900,
+  html.dark .text-gray-800,
+  html.dark .text-gray-950,
+  html.dark .text-gray-700 {
+    color: #ffffff !important;
+  }
+
+  html.dark .text-gray-600,
+  html.dark .text-gray-500,
+  html.dark .text-gray-400 {
+    color: #a3b3c2 !important;
+  }
+
+  /* Interactive hover backgrounds in dark containers */
+  .hover\:bg-gray-100:hover,
+  .hover\:bg-gray-100\/80:hover,
+  .hover\:bg-\[\#E4E6EB\]:hover {
+    background-color: #21262d !important;
+  }
+}
+
+/* Video.js player fill overrides */
+.video-js.vjs-fill,
+.video-js.vjs-16-9,
+.video-js.vjs-4-3 {
+  width: 100% !important;
+  height: 100% !important;
+  padding-top: 0 !important;
+}
+
+.video-js .vjs-tech {
+  object-fit: cover !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.video-js {
+  background-color: transparent !important;
+}
+

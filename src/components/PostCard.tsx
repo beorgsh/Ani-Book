@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ThumbsUp, Heart, MessageSquare, Share2, MoreHorizontal, Globe, Check, Send, Sparkles, Image as ImageIcon, Tv, Mic, Star, Play, Film } from "lucide-react";
+import { ThumbsUp, Heart, MessageSquare, Share2, MoreHorizontal, Globe, Check, Send, Sparkles, Image as ImageIcon, Tv, Mic, Star, Play, Film, BadgeCheck } from "lucide-react";
 import { Post } from "../types";
 import AnimeEpisodesList from "./AnimeEpisodesList";
 
@@ -33,6 +33,24 @@ export default function PostCard({
   const [activeImage, setActiveImage] = useState<string>(initialBackdrop);
   const [isLoadingMalBanner, setIsLoadingMalBanner] = useState(false);
   const [hasTriedProxy, setHasTriedProxy] = useState(false);
+  const [isPortraitImage, setIsPortraitImage] = useState(false);
+
+  // Detect image aspect ratio to apply portrait genre layout when image is portrait format
+  useEffect(() => {
+    if (!activeImage) {
+      setIsPortraitImage(false);
+      return;
+    }
+    const img = new Image();
+    img.src = activeImage;
+    img.onload = () => {
+      if (img.naturalHeight > img.naturalWidth * 1.05) {
+        setIsPortraitImage(true);
+      } else {
+        setIsPortraitImage(false);
+      }
+    };
+  }, [activeImage]);
 
   // Helper to proxy image URLs for CORS
   const getProxiedUrl = (url: string) => {
@@ -134,7 +152,7 @@ export default function PostCard({
   const isGenrePost = Boolean(post.isGenre || post.id.startsWith("genre-") || (post.studio && post.studio.includes("Guild")));
 
   return (
-    <div className="w-full max-w-full bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-3.5 sm:mb-4 transition-all min-w-0 box-border" id={`post-${post.id}`}>
+    <div className="w-full max-w-full bg-white dark:bg-[#161b22] text-gray-900 dark:text-gray-100 rounded-2xl shadow-sm border border-gray-200 dark:border-[#30363d] overflow-hidden mb-3.5 sm:mb-4 transition-all min-w-0 box-border" id={`post-${post.id}`}>
       {/* Post Header */}
       <div className="p-3 sm:p-4 flex items-center justify-between gap-2 min-w-0">
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
@@ -142,7 +160,7 @@ export default function PostCard({
             <img
               src={studioAvatarUrl}
               alt={studioDisplayName}
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-gray-100 shadow-sm"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-gray-100 dark:border-[#30363d] shadow-sm"
               referrerPolicy="no-referrer"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = `https://api.dicebear.com/9.x/bottts/svg?seed=${encodeURIComponent(studioDisplayName)}`;
@@ -152,25 +170,20 @@ export default function PostCard({
           <div className="min-w-0 flex-1">
             {/* Studio Name with Verified Badge on right */}
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="font-bold text-gray-900 text-xs sm:text-sm hover:underline cursor-pointer leading-tight truncate">
+              <span className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm hover:underline cursor-pointer leading-tight truncate">
                 {studioDisplayName}
               </span>
-              <span 
-                className="inline-flex items-center justify-center w-3 h-3 sm:w-3.5 sm:h-3.5 bg-[#1877F2] text-white rounded-full shrink-0 shadow-2xs" 
-                title="Verified Studio"
-              >
-                <Check className="w-2 h-2 sm:w-2.5 sm:h-2.5 stroke-[3]" />
-              </span>
+              <BadgeCheck className="w-4 h-4 fill-[#1877F2] text-white shrink-0" />
             </div>
             
             {/* Date / Year • CC Icon & Available Count • Dub Icon & Available Count (Grayish text, no bg, no Sub/Dub text) */}
-            <div className="flex items-center flex-wrap gap-1.5 text-gray-500 text-[10px] sm:text-[11px] font-medium mt-0.5 min-w-0">
+            <div className="flex items-center flex-wrap gap-1.5 text-gray-500 dark:text-gray-400 text-[10px] sm:text-[11px] font-medium mt-0.5 min-w-0">
               <span>{post.year || (post.aired ? post.aired.match(/\d{4}/)?.[0] : null) || (post.timestamp ? post.timestamp.match(/\d{4}/)?.[0] : null) || "2026"}</span>
               <span>·</span>
               
               {/* CC Icon & Count */}
-              <span className="inline-flex items-center gap-1 text-gray-500 font-medium">
-                <span className="font-extrabold text-xs text-gray-500">CC</span>
+              <span className="inline-flex items-center gap-1 text-gray-500 dark:text-gray-400 font-medium">
+                <span className="font-extrabold text-xs text-gray-500 dark:text-gray-400">CC</span>
                 <span>{post.is_sub || (post.episodes && !isNaN(Number(post.episodes)) ? post.episodes : 1175)}</span>
               </span>
 
@@ -178,7 +191,7 @@ export default function PostCard({
               {post.is_dub !== undefined && post.is_dub !== null && post.is_dub > 0 && (
                 <>
                   <span>·</span>
-                  <span className="inline-flex items-center gap-1 text-gray-500 font-medium">
+                  <span className="inline-flex items-center gap-1 text-gray-500 dark:text-gray-400 font-medium">
                     <Mic className="h-3 w-3 text-gray-400 shrink-0" />
                     <span>{post.is_dub}</span>
                   </span>
@@ -191,12 +204,12 @@ export default function PostCard({
         {/* Liked status badge & Options Button */}
         <div className="flex items-center gap-1.5 shrink-0">
           {post.isLikedByUser && (
-            <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold px-2 py-0.5 bg-rose-50 text-rose-600 rounded-full border border-rose-200/80 shadow-2xs animate-fade-in">
+            <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold px-2 py-0.5 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-full border border-rose-200/80 dark:border-rose-900/50 shadow-2xs animate-fade-in">
               <Heart className="w-3 h-3 fill-rose-500 text-rose-500" />
               <span>Liked</span>
             </span>
           )}
-          <button className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1.5 sm:p-2 rounded-full cursor-pointer transition-colors shrink-0">
+          <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#21262d] p-1.5 sm:p-2 rounded-full cursor-pointer transition-colors shrink-0">
             <MoreHorizontal className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
           </button>
         </div>
@@ -204,11 +217,11 @@ export default function PostCard({
 
       {/* Post Body Text */}
       <div className="px-3 sm:px-4 pb-3 min-w-0">
-        {/* Anime Title in description bolded (if not genre post) */}
-        {post.title && !isGenrePost && (
+        {/* Anime Title in description bolded (if not genre post and not portrait) */}
+        {post.title && !isGenrePost && !isPortraitImage && (
           <h3 
             onClick={() => shouldTruncate && setIsExpanded(!isExpanded)}
-            className={`font-bold text-gray-950 text-sm sm:text-base leading-snug mb-1 ${
+            className={`font-bold text-gray-950 dark:text-white text-sm sm:text-base leading-snug mb-1 ${
               shouldTruncate ? "cursor-pointer hover:text-[#1877F2] transition-colors" : ""
             }`}
           >
@@ -225,7 +238,7 @@ export default function PostCard({
               setIsExpanded(!isExpanded);
             }
           }}
-          className={`relative text-gray-800 text-[13px] sm:text-[14px] leading-relaxed whitespace-pre-wrap break-words ${
+          className={`relative text-gray-800 dark:text-gray-200 text-[13px] sm:text-[14px] leading-relaxed whitespace-pre-wrap break-words ${
             shouldTruncate ? "cursor-pointer group hover:opacity-95 transition-opacity" : ""
           }`}
           title={shouldTruncate ? (isExpanded ? "Click text to collapse" : "Click text to expand") : undefined}
@@ -275,13 +288,13 @@ export default function PostCard({
         )}
       </div>
 
-      {/* Media Display: Genre Blurred Backdrop with Portrait Poster & Info OR Standard Landscape Banner */}
+      {/* Media Display: Genre or Portrait Blurred Backdrop with Poster on Left & Info on Right OR Standard Landscape Banner */}
       {activeImage ? (
-        isGenrePost ? (
-          /* Genre Post: Ambient Blurred Background with Sharp Portrait Poster on Left & Title/Details on Right */
+        (isGenrePost || isPortraitImage) ? (
+          /* Genre / Portrait Post: Ambient Blurred Background with Sharp Portrait Poster on Left & Title/Details on Right */
           <div
             onClick={() => onImageClick?.(post)}
-            className="relative bg-slate-950 flex items-center overflow-hidden border-t border-b border-gray-100 w-full min-h-[210px] sm:min-h-[240px] md:min-h-[260px] group select-none cursor-pointer p-3 sm:p-4.5 md:p-5 transition-all"
+            className="relative bg-black flex items-center overflow-hidden border-t border-b border-gray-100 w-full min-h-[210px] sm:min-h-[240px] md:min-h-[260px] group select-none cursor-pointer p-3 sm:p-4.5 md:p-5 transition-all"
             title="Click to view full anime details & episodes"
           >
             {/* Layer 1: Ambient Blurred Background */}
@@ -289,12 +302,12 @@ export default function PostCard({
               src={activeImage}
               alt=""
               aria-hidden="true"
-              className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-45 scale-125 pointer-events-none transition-transform duration-700 group-hover:scale-135"
+              className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-80 scale-125 pointer-events-none transition-transform duration-700 group-hover:scale-135"
               referrerPolicy="no-referrer"
             />
-            {/* Layer 2: Deep Dark Gradient Overlay for Maximum Legibility */}
-            <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/80 to-black/60 pointer-events-none" />
-            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors pointer-events-none" />
+            {/* Layer 2: Subtle Dark Overlay for High Text Readability while preserving poster colors */}
+            <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/55 to-black/45 pointer-events-none" />
+            <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors pointer-events-none" />
 
             {/* Layer 3: Foreground Content (Left Portrait Poster + Right Details) */}
             <div className="relative z-10 w-full flex items-center gap-3 sm:gap-4 md:gap-5 min-w-0">
@@ -419,7 +432,7 @@ export default function PostCard({
       ) : null}
 
       {/* Social Statistics Counter */}
-      <div className="px-3 sm:px-4 py-2 border-b border-gray-200 flex items-center justify-between text-[11px] sm:text-xs text-gray-500 font-medium select-none min-w-0 gap-2">
+      <div className="px-3 sm:px-4 py-2 border-b border-gray-200 dark:border-[#30363d] flex items-center justify-between text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 font-medium select-none min-w-0 gap-2">
         <div className="flex items-center gap-1.5 min-w-0 truncate">
           <div className="flex -space-x-1 shrink-0">
             <span className="flex items-center justify-center w-4 h-4 rounded-full bg-[#1877F2] text-white text-[9px]">👍</span>
@@ -434,9 +447,9 @@ export default function PostCard({
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <button
             onClick={() => setShowComments(!showComments)}
-            className="hover:underline cursor-pointer font-medium text-gray-500 inline-flex items-center gap-1.5"
+            className="hover:underline cursor-pointer font-medium text-gray-500 dark:text-gray-400 inline-flex items-center gap-1.5"
           >
-            <span className="font-extrabold text-xs text-gray-500">CC</span>
+            <span className="font-extrabold text-xs text-gray-500 dark:text-gray-400">CC</span>
             <span>{post.is_sub || (post.episodes && !isNaN(Number(post.episodes)) ? post.episodes : 1175)}</span>
             {post.is_dub ? (
               <>
@@ -452,13 +465,13 @@ export default function PostCard({
       </div>
 
       {/* Interactive Action Controls Row */}
-      <div className="flex items-center justify-between px-1 sm:px-2 py-1 text-gray-600 font-bold text-xs sm:text-sm select-none min-w-0">
+      <div className="flex items-center justify-between px-1 sm:px-2 py-1 text-gray-600 dark:text-gray-300 font-bold text-xs sm:text-sm select-none min-w-0">
         <button
           onClick={() => onLikeToggle(post.id)}
           className={`flex items-center justify-center gap-1.5 sm:gap-2 flex-1 py-1.5 sm:py-2 rounded-xl transition-all duration-150 cursor-pointer min-w-0 ${
             post.isLikedByUser 
-              ? 'text-rose-600 bg-rose-50/80 hover:bg-rose-100/80 border border-rose-200/60 shadow-2xs scale-101' 
-              : 'hover:bg-gray-100 text-gray-700'
+              ? 'text-rose-600 dark:text-rose-400 bg-rose-50/80 dark:bg-rose-950/40 hover:bg-rose-100/80 border border-rose-200/60 dark:border-rose-900/50 shadow-2xs scale-101' 
+              : 'hover:bg-gray-100 dark:hover:bg-[#21262d] text-gray-700 dark:text-gray-200'
           }`}
           title={post.isLikedByUser ? "Liked! Saved in browser cookies" : "Like this anime and save to cookies"}
         >
@@ -472,7 +485,7 @@ export default function PostCard({
 
         <button
           onClick={() => setShowComments(!showComments)}
-          className="flex items-center justify-center gap-1.5 sm:gap-2 flex-1 py-1.5 sm:py-2 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer min-w-0"
+          className="flex items-center justify-center gap-1.5 sm:gap-2 flex-1 py-1.5 sm:py-2 rounded-xl hover:bg-gray-100 dark:hover:bg-[#21262d] transition-colors cursor-pointer min-w-0"
         >
           <MessageSquare className="h-4 w-4 sm:h-4.5 sm:w-4.5 shrink-0" />
           <span className="truncate">Episodes</span>
@@ -480,7 +493,7 @@ export default function PostCard({
 
         <button
           onClick={() => onShare(post.id)}
-          className="flex items-center justify-center gap-1.5 sm:gap-2 flex-1 py-1.5 sm:py-2 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer min-w-0"
+          className="flex items-center justify-center gap-1.5 sm:gap-2 flex-1 py-1.5 sm:py-2 rounded-xl hover:bg-gray-100 dark:hover:bg-[#21262d] transition-colors cursor-pointer min-w-0"
         >
           <Share2 className="h-4 w-4 sm:h-4.5 sm:w-4.5 shrink-0" />
           <span className="truncate">Share</span>
@@ -489,7 +502,7 @@ export default function PostCard({
 
       {/* Drawer panel showing Anime Episodes from API */}
       {showComments && (
-        <div className="border-t border-gray-100 bg-gray-50 p-3 sm:p-4 transition-all min-w-0 box-border" id={`comments-panel-${post.id}`}>
+        <div className="border-t border-gray-100 dark:border-[#30363d] bg-gray-50 dark:bg-[#12171f] p-3 sm:p-4 transition-all min-w-0 box-border" id={`comments-panel-${post.id}`}>
           <AnimeEpisodesList 
             aniId={post.ani_id} 
             animeTitle={post.title}

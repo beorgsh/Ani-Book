@@ -237,7 +237,7 @@ export default function ReelPlayerModal({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.25 }}
-      className="fixed inset-0 z-50 bg-black flex items-center justify-center p-0 sm:py-6 sm:px-4 lg:py-8 lg:px-6 select-none h-screen h-dvh w-screen overflow-hidden"
+      className="fixed inset-0 z-50 bg-black flex items-center justify-center p-0 select-none h-screen h-[100dvh] w-screen overflow-hidden"
       onClick={onClose}
       id="fullscreen-reels-lineup-modal"
     >
@@ -246,7 +246,7 @@ export default function ReelPlayerModal({
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.94 }}
         transition={{ type: "spring", damping: 28, stiffness: 320 }}
-        className="relative w-full h-full max-w-md sm:max-w-lg lg:max-w-xl sm:h-[92vh] sm:rounded-2xl lg:rounded-3xl bg-black overflow-hidden shadow-2xl flex flex-col border-x sm:border border-white/10"
+        className="relative w-full h-full max-w-md sm:max-w-lg lg:max-w-xl h-screen h-[100dvh] bg-black overflow-hidden shadow-2xl flex flex-col border-x sm:border border-white/10"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Custom CSS overrides to block VideoJS spinner flicker & animate CD notes */}

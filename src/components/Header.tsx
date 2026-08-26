@@ -11,7 +11,9 @@ import {
   Clock, 
   Film,
   Sliders,
-  Check
+  Check,
+  Moon,
+  Sun
 } from "lucide-react";
 
 interface HeaderProps {
@@ -23,6 +25,8 @@ interface HeaderProps {
   onLogoClick?: () => void;
   onOpenSettings?: () => void;
   onTabSelect?: (tab: "feed" | "latest" | "liked" | "genre") => void;
+  isDarkMode?: boolean;
+  onToggleDarkMode?: () => void;
 }
 
 export default function Header({
@@ -33,7 +37,9 @@ export default function Header({
   onToggleSidebar,
   onLogoClick,
   onOpenSettings,
-  onTabSelect
+  onTabSelect,
+  isDarkMode = false,
+  onToggleDarkMode
 }: HeaderProps) {
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -102,7 +108,7 @@ export default function Header({
 
   return (
     <header 
-      className={`fixed top-0 left-0 right-0 z-50 flex items-center justify-between bg-white px-3 sm:px-6 h-14 border-b border-gray-200 shadow-sm transition-transform duration-300 ease-in-out ${
+      className={`fixed top-0 left-0 right-0 z-50 flex items-center justify-between bg-white/95 dark:bg-[#161b22]/95 backdrop-blur-md px-3 sm:px-6 h-14 border-b border-gray-200 dark:border-[#30363d] shadow-sm transition-transform duration-300 ease-in-out ${
         isHeaderVisible ? "translate-y-0" : "-translate-y-full"
       }`} 
       id="anibook-header"
@@ -115,8 +121,8 @@ export default function Header({
           aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
           className={`flex items-center justify-center w-9 h-9 rounded-full transition-all duration-200 cursor-pointer ${
             isSidebarOpen 
-              ? "bg-blue-100 text-[#1877F2] rotate-90" 
-              : "bg-[#F0F2F5] hover:bg-[#E4E6EB] text-gray-700 hover:text-gray-900"
+              ? "bg-blue-100 dark:bg-blue-950/60 text-[#1877F2] dark:text-blue-400 rotate-90" 
+              : "bg-[#F0F2F5] dark:bg-[#21262d] hover:bg-[#E4E6EB] dark:hover:bg-[#30363d] text-gray-700 dark:text-gray-200"
           }`}
           title="Toggle Sidebar Menu"
           id="sidebar-toggle-button"
@@ -130,7 +136,7 @@ export default function Header({
           className="flex items-center gap-2 select-none cursor-pointer hover:opacity-90 transition-opacity"
           title="AniBook Home Feed"
         >
-          <span className="font-sans font-black tracking-tight text-xl sm:text-2xl text-[#1877F2]">
+          <span className="font-sans font-black tracking-tight text-xl sm:text-2xl text-[#1877F2] dark:text-blue-400">
             AniBook
           </span>
         </div>
@@ -148,13 +154,13 @@ export default function Header({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search anime, genres, studios on AniBook..."
-            className="w-full h-9.5 rounded-full bg-[#F0F2F5] pl-10 pr-9 text-sm text-gray-900 placeholder-gray-500 border border-transparent focus:border-blue-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1877F2]/20 transition-all"
+            className="w-full h-9.5 rounded-full bg-[#F0F2F5] dark:bg-[#21262d] pl-10 pr-9 text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 border border-transparent dark:border-[#30363d] focus:border-blue-300 focus:bg-white dark:focus:bg-[#161b22] focus:outline-none focus:ring-2 focus:ring-[#1877F2]/20 transition-all"
             id="header-search-bar"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery("")}
-              className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
             >
               <X className="h-4 w-4" />
             </button>
@@ -164,7 +170,7 @@ export default function Header({
         {/* Mobile Search Toggle & Input */}
         <div className="sm:hidden flex justify-end">
           {isMobileSearchOpen ? (
-            <div className="fixed inset-x-0 top-0 h-14 bg-white z-50 px-3 flex items-center gap-2 border-b border-gray-200 shadow-sm animate-fade-in">
+            <div className="fixed inset-x-0 top-0 h-14 bg-white dark:bg-[#161b22] z-50 px-3 flex items-center gap-2 border-b border-gray-200 dark:border-[#30363d] shadow-sm animate-fade-in">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input
@@ -173,12 +179,12 @@ export default function Header({
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search AniBook..."
                   autoFocus
-                  className="w-full h-9 rounded-full bg-[#F0F2F5] pl-9 pr-8 text-sm text-gray-900 border border-transparent focus:bg-white focus:border-blue-300 focus:outline-none"
+                  className="w-full h-9 rounded-full bg-[#F0F2F5] dark:bg-[#21262d] pl-9 pr-8 text-sm text-gray-900 dark:text-white border border-transparent dark:border-[#30363d] focus:bg-white dark:focus:bg-[#161b22] focus:border-blue-300 focus:outline-none"
                 />
                 {searchQuery && (
                   <button
                     onClick={() => setSearchQuery("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -186,7 +192,7 @@ export default function Header({
               </div>
               <button
                 onClick={() => setIsMobileSearchOpen(false)}
-                className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-full"
+                className="p-1.5 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#21262d] rounded-full"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -194,7 +200,7 @@ export default function Header({
           ) : (
             <button
               onClick={() => setIsMobileSearchOpen(true)}
-              className="flex items-center justify-center w-9 h-9 rounded-full bg-[#F0F2F5] hover:bg-[#E4E6EB] text-gray-700 transition-colors"
+              className="flex items-center justify-center w-9 h-9 rounded-full bg-[#F0F2F5] dark:bg-[#21262d] hover:bg-[#E4E6EB] dark:hover:bg-[#30363d] text-gray-700 dark:text-gray-200 transition-colors"
               title="Search"
             >
               <Search className="h-4.5 w-4.5" />
@@ -206,10 +212,25 @@ export default function Header({
       {/* Right section: Header Settings Button & User Avatar Dropdown */}
       <div className="flex items-center gap-1.5 sm:gap-2 select-none relative" ref={dropdownRef}>
         
+        {/* Dark Mode Toggle Button in Header */}
+        <button
+          onClick={onToggleDarkMode}
+          className="flex items-center justify-center w-9 h-9 rounded-full bg-[#F0F2F5] dark:bg-[#21262d] hover:bg-[#E4E6EB] dark:hover:bg-[#30363d] text-gray-700 dark:text-gray-200 hover:text-purple-600 transition-colors cursor-pointer border border-transparent dark:border-[#30363d]"
+          title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode (Saved in Cookie)"}
+          aria-label="Toggle Dark Mode"
+          id="header-darkmode-button"
+        >
+          {isDarkMode ? (
+            <Sun className="w-5 h-5 text-amber-400 fill-amber-400/20" />
+          ) : (
+            <Moon className="w-5 h-5 text-purple-600 fill-purple-600/20" />
+          )}
+        </button>
+
         {/* Dedicated Quick Settings Button in Header */}
         <button
           onClick={onOpenSettings}
-          className="flex items-center justify-center w-9 h-9 rounded-full bg-[#F0F2F5] hover:bg-[#E4E6EB] text-gray-700 hover:text-[#1877F2] transition-colors cursor-pointer"
+          className="flex items-center justify-center w-9 h-9 rounded-full bg-[#F0F2F5] dark:bg-[#21262d] hover:bg-[#E4E6EB] dark:hover:bg-[#30363d] text-gray-700 dark:text-gray-200 hover:text-[#1877F2] transition-colors cursor-pointer border border-transparent dark:border-[#30363d]"
           title="AniBook Settings & Reel Options"
           aria-label="Settings"
           id="header-settings-button"
@@ -220,8 +241,8 @@ export default function Header({
         {/* User Avatar with interactive dropdown trigger */}
         <div 
           onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-          className={`flex items-center gap-1.5 p-1 pr-1.5 rounded-full hover:bg-gray-100 cursor-pointer transition-all ${
-            isDropdownOpen ? "bg-gray-100" : ""
+          className={`flex items-center gap-1.5 p-1 pr-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-[#21262d] cursor-pointer transition-all ${
+            isDropdownOpen ? "bg-gray-100 dark:bg-[#21262d]" : ""
           }`} 
           title="Account & Settings Menu"
           id="header-avatar-dropdown-trigger"
@@ -229,49 +250,49 @@ export default function Header({
           <img
             src={currentUser.avatar}
             alt={currentUser.name}
-            className="w-8.5 h-8.5 sm:w-9 sm:h-9 rounded-full object-cover border border-gray-200 shadow-sm"
+            className="w-8.5 h-8.5 sm:w-9 sm:h-9 rounded-full object-cover border border-gray-200 dark:border-[#30363d] shadow-sm"
             referrerPolicy="no-referrer"
             onError={(e) => {
               (e.target as HTMLImageElement).src = "https://api.dicebear.com/9.x/adventurer/svg?seed=OtakuExplorer_MainUser&backgroundColor=b6e3f4";
             }}
           />
-          <ChevronDown className={`w-3.5 h-3.5 text-gray-600 transition-transform ${isDropdownOpen ? "rotate-180" : ""}`} />
+          <ChevronDown className={`w-3.5 h-3.5 text-gray-600 dark:text-gray-300 transition-transform ${isDropdownOpen ? "rotate-180" : ""}`} />
         </div>
 
         {/* Avatar Dropdown Menu */}
         {isDropdownOpen && (
           <div 
-            className="absolute right-0 top-12 w-64 bg-white rounded-2xl shadow-xl border border-gray-200 py-2 z-50 animate-scale-up overflow-hidden"
+            className="absolute right-0 top-12 w-64 bg-white dark:bg-[#161b22] text-gray-900 dark:text-gray-100 rounded-2xl shadow-xl border border-gray-200 dark:border-[#30363d] py-2 z-50 animate-scale-up overflow-hidden"
             id="avatar-dropdown-menu"
           >
             {/* User Info Header */}
-            <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-3">
+            <div className="px-4 py-2.5 border-b border-gray-100 dark:border-[#30363d] flex items-center gap-3">
               <img
                 src={currentUser.avatar}
                 alt={currentUser.name}
-                className="w-10 h-10 rounded-full object-cover border border-gray-200 shadow-xs"
+                className="w-10 h-10 rounded-full object-cover border border-gray-200 dark:border-[#30363d] shadow-xs"
                 referrerPolicy="no-referrer"
               />
               <div className="min-w-0">
-                <span className="block text-sm font-bold text-gray-900 truncate">
+                <span className="block text-sm font-bold text-gray-900 dark:text-white truncate">
                   {currentUser.name}
                 </span>
-                <span className="block text-[11px] text-blue-600 font-semibold truncate">
+                <span className="block text-[11px] text-blue-600 dark:text-blue-400 font-semibold truncate">
                   Otaku Explorer (Online)
                 </span>
               </div>
             </div>
 
             {/* Quick Navigation options */}
-            <div className="py-1 border-b border-gray-100">
+            <div className="py-1 border-b border-gray-100 dark:border-[#30363d]">
               <button
                 onClick={() => {
                   setIsDropdownOpen(false);
                   onTabSelect?.("feed");
                 }}
-                className="w-full px-4 py-2 flex items-center gap-3 text-left text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                className="w-full px-4 py-2 flex items-center gap-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#21262d] transition-colors cursor-pointer"
               >
-                <Shuffle className="w-4 h-4 text-blue-600" />
+                <Shuffle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                 <span>Discovery Feed</span>
               </button>
 
@@ -280,7 +301,7 @@ export default function Header({
                   setIsDropdownOpen(false);
                   onTabSelect?.("latest");
                 }}
-                className="w-full px-4 py-2 flex items-center gap-3 text-left text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                className="w-full px-4 py-2 flex items-center gap-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#21262d] transition-colors cursor-pointer"
               >
                 <Clock className="w-4 h-4 text-red-500" />
                 <span>Latest Airing Anime</span>
@@ -291,7 +312,7 @@ export default function Header({
                   setIsDropdownOpen(false);
                   onTabSelect?.("liked");
                 }}
-                className="w-full px-4 py-2 flex items-center gap-3 text-left text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                className="w-full px-4 py-2 flex items-center gap-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#21262d] transition-colors cursor-pointer"
               >
                 <Heart className="w-4 h-4 text-rose-500 fill-rose-500" />
                 <span>Liked Anime Collection</span>
@@ -305,16 +326,16 @@ export default function Header({
                   setIsDropdownOpen(false);
                   onOpenSettings?.();
                 }}
-                className="w-full px-4 py-2.5 flex items-center justify-between text-left text-xs font-bold text-gray-900 hover:bg-purple-50 hover:text-purple-700 transition-colors cursor-pointer"
+                className="w-full px-4 py-2.5 flex items-center justify-between text-left text-xs font-bold text-gray-900 dark:text-white hover:bg-purple-50 dark:hover:bg-purple-950/40 hover:text-purple-700 dark:hover:text-purple-300 transition-colors cursor-pointer"
                 id="dropdown-settings-option"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
+                  <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center">
                     <Sliders className="w-4 h-4" />
                   </div>
                   <div>
                     <span className="block text-xs font-bold">Settings & Reel Options</span>
-                    <span className="block text-[10px] text-gray-500 font-normal">Video playback & frequency</span>
+                    <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-normal">Video playback & frequency</span>
                   </div>
                 </div>
               </button>

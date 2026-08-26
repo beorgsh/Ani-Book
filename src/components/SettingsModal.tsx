@@ -12,7 +12,9 @@ import {
   Check, 
   RotateCcw,
   Layers,
-  HelpCircle
+  HelpCircle,
+  Moon,
+  Sun
 } from "lucide-react";
 import { ReelSettings, DEFAULT_REEL_SETTINGS } from "../utils/reelSettings";
 
@@ -24,6 +26,8 @@ interface SettingsModalProps {
   onUpdateReelSettings: (newSettings: ReelSettings) => void;
   onRefreshFeed?: () => void;
   currentUser: { name: string; avatar: string };
+  isDarkMode?: boolean;
+  onToggleDarkMode?: () => void;
 }
 
 export default function SettingsModal({
@@ -32,7 +36,9 @@ export default function SettingsModal({
   reelSettings,
   onUpdateReelSettings,
   onRefreshFeed,
-  currentUser
+  currentUser,
+  isDarkMode = false,
+  onToggleDarkMode
 }: SettingsModalProps) {
   const handleResetDefaults = () => {
     onUpdateReelSettings(DEFAULT_REEL_SETTINGS);
@@ -118,6 +124,40 @@ export default function SettingsModal({
             <span className="px-2.5 py-1 rounded-full bg-blue-600 text-white text-[11px] font-bold shadow-xs">
               Active
             </span>
+          </div>
+
+          {/* Section: Dark Mode Cookie Persistence */}
+          <div className="flex items-center justify-between p-3.5 rounded-xl bg-purple-50/60 hover:bg-purple-50 border border-purple-100 transition-colors">
+            <div className="pr-3">
+              <div className="flex items-center gap-2">
+                {isDarkMode ? (
+                  <Moon className="w-4 h-4 text-purple-600 fill-purple-600/20" />
+                ) : (
+                  <Sun className="w-4 h-4 text-amber-500 fill-amber-500/20" />
+                )}
+                <span className="text-sm font-bold text-gray-900">Dark Theme Mode</span>
+                {isDarkMode && (
+                  <span className="text-[10px] bg-purple-200 text-purple-800 font-bold px-1.5 py-0.2 rounded">COOKIE SAVED</span>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Toggle dark mode interface. Preference is saved in browser cookie and remembered on refresh.
+              </p>
+            </div>
+            <button
+              onClick={onToggleDarkMode}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                isDarkMode ? "bg-purple-600" : "bg-gray-300"
+              }`}
+              role="switch"
+              aria-checked={isDarkMode}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                  isDarkMode ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
           </div>
 
           {/* Section: Video Reels in Feed */}

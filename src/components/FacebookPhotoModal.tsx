@@ -211,14 +211,6 @@ export default function FacebookPhotoModal({
                     <span className="hidden sm:inline">AniList</span>
                   </a>
                 )}
-                {/* Fullscreen Toggle */}
-                <button
-                  onClick={() => setIsFullscreen(!isFullscreen)}
-                  className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center backdrop-blur-md transition-colors cursor-pointer"
-                  title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
-                >
-                  {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                </button>
               </div>
             </div>
 
@@ -282,21 +274,21 @@ export default function FacebookPhotoModal({
             )}
           </div>
 
-          {/* ================= RIGHT / SIDEBAR: Facebook Post Details & Episodes Component (Single Scrollview) ================= */}
-          <div className="w-full lg:w-[380px] xl:w-[420px] bg-white flex flex-col h-[50vh] lg:h-full border-t lg:border-t-0 lg:border-l border-gray-200 shrink-0 select-text overflow-y-auto order-2 lg:order-2 z-20">
+          {/* ================= RIGHT / SIDEBAR: Facebook Post Details & Episodes Component (Mobile Bottom Sheet / Desktop Sidebar) ================= */}
+          <div className="w-full lg:w-[380px] xl:w-[420px] bg-white dark:bg-[#161b22] text-gray-900 dark:text-gray-100 flex flex-col h-[52vh] sm:h-[55vh] lg:h-full border-t lg:border-t-0 lg:border-l border-gray-200 dark:border-[#30363d] rounded-t-2xl lg:rounded-none shrink-0 select-text overflow-y-auto order-2 lg:order-2 z-20 shadow-2xl">
             {/* Post Header */}
-            <div className="p-3.5 sm:p-4 border-b border-gray-100 flex items-center justify-between gap-3 shrink-0">
+            <div className="p-3.5 sm:p-4 border-b border-gray-100 dark:border-[#30363d] flex items-center justify-between gap-3 shrink-0">
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <img
                   src={studioAvatarUrl}
                   alt={studioDisplayName}
-                  className="w-10 h-10 rounded-full object-cover border border-gray-100 shadow-xs shrink-0"
+                  className="w-10 h-10 rounded-full object-cover border border-gray-100 dark:border-[#30363d] shadow-xs shrink-0"
                   referrerPolicy="no-referrer"
                 />
                 <div className="min-w-0 flex-1">
                   {/* Studio Name with Verified Blue Badge on right */}
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="font-bold text-gray-900 text-sm hover:underline cursor-pointer truncate">
+                    <span className="font-bold text-gray-900 dark:text-white text-sm hover:underline cursor-pointer truncate">
                       {studioDisplayName}
                     </span>
                     {/* Verified Blue Badge with White Check */}
@@ -309,13 +301,13 @@ export default function FacebookPhotoModal({
                   </div>
 
                   {/* Date / Year • CC Icon & Available Count • Dub Icon & Available Count */}
-                  <div className="flex items-center flex-wrap gap-1.5 text-gray-500 text-[11px] font-medium mt-0.5 min-w-0">
+                  <div className="flex items-center flex-wrap gap-1.5 text-gray-500 dark:text-gray-400 text-[11px] font-medium mt-0.5 min-w-0">
                     <span>{post.year || (post.aired ? post.aired.match(/\d{4}/)?.[0] : null) || (post.timestamp ? post.timestamp.match(/\d{4}/)?.[0] : null) || "2026"}</span>
                     <span>·</span>
                     
                     {/* CC Icon & Count */}
-                    <span className="inline-flex items-center gap-1 text-gray-500 font-medium">
-                      <span className="font-extrabold text-xs text-gray-500">CC</span>
+                    <span className="inline-flex items-center gap-1 text-gray-500 dark:text-gray-400 font-medium">
+                      <span className="font-extrabold text-xs text-gray-500 dark:text-gray-400">CC</span>
                       <span>{post.is_sub || (post.episodes && !isNaN(Number(post.episodes)) ? post.episodes : 1175)}</span>
                     </span>
 
@@ -323,7 +315,7 @@ export default function FacebookPhotoModal({
                     {post.is_dub !== undefined && post.is_dub !== null && post.is_dub > 0 && (
                       <>
                         <span>·</span>
-                        <span className="inline-flex items-center gap-1 text-gray-500 font-medium">
+                        <span className="inline-flex items-center gap-1 text-gray-500 dark:text-gray-400 font-medium">
                           <Mic className="h-3 w-3 text-gray-400 shrink-0" />
                           <span>{post.is_dub}</span>
                         </span>
@@ -333,7 +325,7 @@ export default function FacebookPhotoModal({
                 </div>
               </div>
 
-              <button className="text-gray-400 hover:text-gray-600 p-1.5 rounded-full hover:bg-gray-100 cursor-pointer">
+              <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-[#21262d] cursor-pointer">
                 <MoreHorizontal className="h-5 w-5" />
               </button>
             </div>
@@ -342,7 +334,7 @@ export default function FacebookPhotoModal({
             <div className="p-4 space-y-3.5 min-w-0 flex-1">
               {/* Anime Title */}
               {post.title && (
-                <h3 className="font-bold text-gray-950 text-base leading-snug">
+                <h3 className="font-bold text-gray-950 dark:text-white text-base leading-snug">
                   {post.title}
                 </h3>
               )}
@@ -357,7 +349,7 @@ export default function FacebookPhotoModal({
                     setIsCaptionExpanded(!isCaptionExpanded);
                   }
                 }}
-                className={`text-gray-800 text-[13px] sm:text-[14px] leading-relaxed whitespace-pre-wrap break-words ${
+                className={`text-gray-800 dark:text-gray-200 text-[13px] sm:text-[14px] leading-relaxed whitespace-pre-wrap break-words ${
                   shouldTruncateCaption ? "cursor-pointer group hover:opacity-95 transition-opacity" : ""
                 }`}
                 title={shouldTruncateCaption ? (isCaptionExpanded ? "Click text to collapse" : "Click text to expand") : undefined}
@@ -386,18 +378,18 @@ export default function FacebookPhotoModal({
                   {post.genreTags.map((tag) => (
                     <span
                       key={tag}
-                      className="text-[11px] font-semibold px-2.5 py-0.5 bg-blue-50 text-[#1877F2] rounded-full border border-blue-100"
+                      className="text-[11px] font-semibold px-2.5 py-0.5 bg-blue-50 dark:bg-blue-950/40 text-[#1877F2] dark:text-blue-400 rounded-full border border-blue-100 dark:border-blue-900/50"
                     >
                       #{tag}
                     </span>
                   ))}
                   {post.status && (
-                    <span className="text-[11px] font-semibold px-2.5 py-0.5 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100">
+                    <span className="text-[11px] font-semibold px-2.5 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-full border border-emerald-100 dark:border-emerald-900/50">
                       {post.status}
                     </span>
                   )}
                   {post.episodes && (
-                    <span className="text-[11px] font-semibold px-2.5 py-0.5 bg-gray-100 text-gray-600 rounded-full">
+                    <span className="text-[11px] font-semibold px-2.5 py-0.5 bg-gray-100 dark:bg-[#21262d] text-gray-600 dark:text-gray-300 rounded-full">
                       {post.episodes} eps
                     </span>
                   )}
@@ -405,7 +397,7 @@ export default function FacebookPhotoModal({
               )}
 
               {/* Social Counters */}
-              <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500 font-medium select-none">
+              <div className="pt-2 border-t border-gray-100 dark:border-[#30363d] flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 font-medium select-none">
                 <div className="flex items-center gap-1.5">
                   <div className="flex -space-x-1">
                     <span className="w-4 h-4 rounded-full bg-[#1877F2] text-white flex items-center justify-center text-[9px]">👍</span>
@@ -416,8 +408,8 @@ export default function FacebookPhotoModal({
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-gray-500 inline-flex items-center gap-1.5">
-                    <span className="font-extrabold text-xs text-gray-500">CC</span>
+                  <span className="font-medium text-gray-500 dark:text-gray-400 inline-flex items-center gap-1.5">
+                    <span className="font-extrabold text-xs text-gray-500 dark:text-gray-400">CC</span>
                     <span>{post.is_sub || (post.episodes && !isNaN(Number(post.episodes)) ? post.episodes : 1175)}</span>
                     {post.is_dub ? (
                       <>
@@ -433,11 +425,11 @@ export default function FacebookPhotoModal({
               </div>
 
               {/* Action Buttons Row */}
-              <div className="py-1 border-t border-b border-gray-100 flex items-center justify-between text-xs font-bold text-gray-600 select-none">
+              <div className="py-1 border-t border-b border-gray-100 dark:border-[#30363d] flex items-center justify-between text-xs font-bold text-gray-600 dark:text-gray-300 select-none">
                 <button
                   onClick={() => onLikeToggle(post.id)}
                   className={`flex items-center justify-center gap-1.5 flex-1 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                    post.isLikedByUser ? "text-[#1877F2] bg-blue-50" : "hover:bg-gray-100"
+                    post.isLikedByUser ? "text-[#1877F2] bg-blue-50 dark:bg-blue-950/40" : "hover:bg-gray-100 dark:hover:bg-[#21262d]"
                   }`}
                 >
                   <ThumbsUp className={`h-4 w-4 ${post.isLikedByUser ? "fill-[#1877F2]" : ""}`} />
@@ -449,7 +441,7 @@ export default function FacebookPhotoModal({
                     const inputEl = document.getElementById("photo-modal-comment-input");
                     if (inputEl) inputEl.focus();
                   }}
-                  className="flex items-center justify-center gap-1.5 flex-1 py-1.5 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                  className="flex items-center justify-center gap-1.5 flex-1 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-[#21262d] transition-colors cursor-pointer"
                 >
                   <MessageSquare className="h-4 w-4" />
                   <span>Episodes</span>
@@ -457,7 +449,7 @@ export default function FacebookPhotoModal({
 
                 <button
                   onClick={() => onShare(post.id)}
-                  className="flex items-center justify-center gap-1.5 flex-1 py-1.5 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                  className="flex items-center justify-center gap-1.5 flex-1 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-[#21262d] transition-colors cursor-pointer"
                 >
                   <Share2 className="h-4 w-4" />
                   <span>Share</span>
@@ -482,12 +474,12 @@ export default function FacebookPhotoModal({
             </div>
 
             {/* Bottom Add Comment Bar */}
-            <div className="p-3 border-t border-gray-100 bg-gray-50 shrink-0">
+            <div className="p-3 border-t border-gray-100 dark:border-[#30363d] bg-gray-50 dark:bg-[#12171f] shrink-0">
               <form onSubmit={handleCommentSubmit} className="flex gap-2 items-center">
                 <img
                   src={currentUser.avatar}
                   alt={currentUser.name}
-                  className="w-7 h-7 rounded-full object-cover border border-gray-200 shrink-0"
+                  className="w-7 h-7 rounded-full object-cover border border-gray-200 dark:border-[#30363d] shrink-0"
                   referrerPolicy="no-referrer"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = "https://api.dicebear.com/9.x/adventurer/svg?seed=OtakuExplorer_MainUser&backgroundColor=b6e3f4";
@@ -500,13 +492,13 @@ export default function FacebookPhotoModal({
                     value={commentInput}
                     onChange={(e) => setCommentInput(e.target.value)}
                     placeholder="Type episode # to search or write a comment..."
-                    className="w-full bg-white h-9 rounded-full pl-3.5 pr-9 text-xs border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1877F2]/25 focus:border-[#1877F2] transition-all"
+                    className="w-full bg-white dark:bg-[#21262d] text-gray-900 dark:text-white h-9 rounded-full pl-3.5 pr-9 text-xs border border-gray-200 dark:border-[#30363d] focus:outline-none focus:ring-2 focus:ring-[#1877F2]/25 focus:border-[#1877F2] transition-all"
                   />
                   <button
                     type="submit"
                     disabled={!commentInput.trim()}
                     className={`absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center w-7 h-7 rounded-full transition-colors cursor-pointer ${
-                      commentInput.trim() ? "bg-[#1877F2] text-white hover:bg-blue-600" : "text-gray-300"
+                      commentInput.trim() ? "bg-[#1877F2] text-white hover:bg-blue-600" : "text-gray-300 dark:text-gray-600"
                     }`}
                   >
                     <Send className="h-3.5 w-3.5" />

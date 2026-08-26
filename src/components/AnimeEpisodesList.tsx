@@ -287,16 +287,16 @@ export default function AnimeEpisodesList({
                 <div className="flex-1 min-w-0">
                   <div className={`rounded-2xl px-3.5 py-2.5 inline-block w-full max-w-[96%] sm:max-w-[92%] shadow-2xs space-y-2 transition-all ${
                     isExactMatch 
-                      ? "bg-blue-50/90 border-2 border-[#1877F2] ring-2 ring-blue-300/50 shadow-md scale-[1.01]" 
-                      : "bg-gray-100/90 border border-transparent"
+                      ? "bg-blue-50/90 dark:bg-blue-950/40 border-2 border-[#1877F2] ring-2 ring-blue-300/50 shadow-md scale-[1.01]" 
+                      : "bg-gray-100/90 dark:bg-[#1c2128] border border-transparent dark:border-[#30363d]"
                   }`}>
                     {/* Highlight Tag when searched/commented */}
                     {isExactMatch && (
-                      <div className="flex items-center justify-between pb-1 border-b border-blue-200/60">
+                      <div className="flex items-center justify-between pb-1 border-b border-blue-200/60 dark:border-blue-800/60">
                         <span className="bg-[#1877F2] text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full inline-flex items-center gap-1 shadow-2xs">
                           ★ Selected Episode #{ep.number}
                         </span>
-                        <span className="text-[10px] font-bold text-blue-700">Matched in comment</span>
+                        <span className="text-[10px] font-bold text-blue-700 dark:text-blue-300">Matched in comment</span>
                       </div>
                     )}
 
@@ -310,7 +310,7 @@ export default function AnimeEpisodesList({
                             setExpandedEpId(isExpanded ? null : ep.id);
                           }
                         }}
-                        className="font-extrabold text-[#1877F2] text-xs sm:text-[13px] hover:underline cursor-pointer leading-tight truncate"
+                        className="font-extrabold text-[#1877F2] dark:text-blue-400 text-xs sm:text-[13px] hover:underline cursor-pointer leading-tight truncate"
                         title={`Click to play Episode ${ep.number}`}
                       >
                         {ep.title ? ep.title : `Episode ${ep.number}`}
@@ -318,20 +318,20 @@ export default function AnimeEpisodesList({
                       {ep.title && (
                         <>
                           <span className="text-gray-400 text-[10px] font-bold">·</span>
-                          <span className="text-gray-500 text-[11px] font-bold truncate">
+                          <span className="text-gray-500 dark:text-gray-400 text-[11px] font-bold truncate">
                             Episode {ep.number}
                           </span>
                         </>
                       )}
                       {streamType === "dub" && (!is_dub || epNum > is_dub) && (
-                        <span className="bg-red-50 text-red-600 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-red-100 select-none uppercase tracking-wide">
+                        <span className="bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-red-100 dark:border-red-900/50 select-none uppercase tracking-wide">
                           SUB Only
                         </span>
                       )}
                     </div>
 
                     {/* Caption = Episode Number & Meta Details */}
-                    <p className="text-gray-800 text-xs leading-snug font-medium">
+                    <p className="text-gray-800 dark:text-gray-200 text-xs leading-snug font-medium">
                       Episode {ep.number}
                       {ep.duration ? ` • ${ep.duration}m` : ""}
                       {ep.isFiller ? " • (Filler)" : ""}

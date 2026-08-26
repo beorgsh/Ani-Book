@@ -165,7 +165,7 @@ export default function SidebarLeft({
 
       {/* SINGLE Unified Scroll View Sidebar */}
       <aside
-        className={`fixed top-14 left-0 z-40 w-72 h-[calc(100vh-3.5rem)] p-3.5 overflow-y-auto overscroll-contain select-none border-r border-gray-200/90 bg-white shadow-2xl lg:shadow-md flex flex-col transition-all duration-300 ease-out transform shrink-0 ${
+        className={`fixed top-14 left-0 z-40 w-72 h-[calc(100vh-3.5rem)] p-3.5 overflow-y-auto overscroll-contain select-none border-r border-gray-200/90 dark:border-[#30363d] bg-white dark:bg-[#161b22] text-gray-900 dark:text-gray-100 shadow-2xl lg:shadow-md flex flex-col transition-all duration-300 ease-out transform shrink-0 ${
           isOpen
             ? "translate-x-0 opacity-100 pointer-events-auto"
             : "-translate-x-full opacity-0 pointer-events-none overflow-hidden"
@@ -173,11 +173,11 @@ export default function SidebarLeft({
         id="toggleable-sidebar-left"
       >
         {/* Mobile Header with close button */}
-        <div className="flex items-center justify-between pb-2.5 mb-1.5 lg:hidden border-b border-gray-100">
-          <span className="font-bold text-sm text-gray-800">AniBook Menu</span>
+        <div className="flex items-center justify-between pb-2.5 mb-1.5 lg:hidden border-b border-gray-100 dark:border-[#30363d]">
+          <span className="font-bold text-sm text-gray-800 dark:text-gray-200">AniBook Menu</span>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500 cursor-pointer transition-colors"
+            className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-[#21262d] text-gray-500 dark:text-gray-400 cursor-pointer transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -186,7 +186,7 @@ export default function SidebarLeft({
         {/* Current User Card */}
         <div 
           onClick={() => handleTabClick("feed")}
-          className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-100/80 cursor-pointer transition-colors duration-150"
+          className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-100/80 dark:hover:bg-[#21262d] cursor-pointer transition-colors duration-150"
         >
           <img
             src={currentUser.avatar}

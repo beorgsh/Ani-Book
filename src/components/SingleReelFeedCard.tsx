@@ -18,7 +18,8 @@ import {
   Tv, 
   ExternalLink,
   ChevronRight,
-  AlertCircle
+  AlertCircle,
+  BadgeCheck
 } from "lucide-react";
 import { Post, Comment, AnimeItem } from "../types";
 import { ReelSettings } from "../utils/reelSettings";
@@ -247,7 +248,7 @@ export default function SingleReelFeedCard({
       muted: isMuted,
       playsinline: true,
       preload: "auto",
-      fluid: true,
+      fill: true,
       responsive: true,
       sources: [
         {
@@ -341,9 +342,22 @@ export default function SingleReelFeedCard({
     if (e) e.stopPropagation();
     if (!playerRef.current || playerRef.current.isDisposed()) return;
     if (playerRef.current.paused()) {
-      playerRef.current.play().catch(() => {});
+      setIsPlaying(true);
+      playerRef.current.play().catch((err) => {
+        // Retry muted playback if browser restricts sound autoplay
+        if (playerRef.current && !playerRef.current.isDisposed()) {
+          playerRef.current.muted(true);
+          setIsMuted(true);
+          playerRef.current.play().catch(() => {
+            setIsPlaying(false);
+          });
+        } else {
+          setIsPlaying(false);
+        }
+      });
     } else {
       playerRef.current.pause();
+      setIsPlaying(false);
     }
   };
 
@@ -472,10 +486,7 @@ export default function SingleReelFeedCard({
               >
                 {studioName}
               </h3>
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-gradient-to-r from-purple-50 to-indigo-50 text-indigo-700 rounded-full border border-indigo-200/80 shadow-2xs">
-                <Sparkles className="w-2.5 h-2.5 text-amber-500" />
-                <span>Reel Discovery</span>
-              </span>
+              <BadgeCheck className="w-4 h-4 fill-[#1877F2] text-white shrink-0" />
             </div>
             <div className="flex items-center gap-2 text-[11px] text-gray-500 font-medium truncate mt-0.5">
               <span className="text-[#1877F2] font-semibold">Reel Discovery</span>
@@ -536,20 +547,69 @@ export default function SingleReelFeedCard({
         )}
       </div>
 
-      {/* Main Video Reel Player Container (Portrait Scope Box) */}
+      {/* Main Video Reel Player Container (Portrait Scope Box with Ambient Blurred Poster BG over Black Screen) */}
       <div 
-        className="relative w-full aspect-[4/5] sm:aspect-[9/16] max-h-[560px] bg-black overflow-hidden flex items-center justify-center cursor-pointer group"
+        className="relative w-full aspect-[4/5] sm:aspect-[9/16] max-h-[560px] bg-black overflow-hidden flex items-center justify-center cursor-pointer group select-none"
         onClick={handleTogglePlay}
       >
-        {/* Full portrait poster thumbnail - Fades out when video plays */}
-        <img
-          src={posterImage}
-          alt={animeData?.title || "Anime Reel Thumbnail"}
-          className={`absolute inset-0 z-20 w-full h-full object-cover transition-opacity duration-500 ease-in-out ${
-            isPlaying ? "opacity-0 pointer-events-none" : "opacity-100"
-          }`}
-          referrerPolicy="no-referrer"
-        />
+        {/* Layer 1: Ambient blurred poster background image over pure black */}
+        {posterImage && (
+          <div 
+            className="absolute inset-0 z-0 bg-cover bg-center blur-2xl opacity-75 scale-125 pointer-events-none transition-transform duration-700 group-hover:scale-135"
+            style={{ backgroundImage: `url(${posterImage})` }}
+          />
+        )}
+
+        {/* Layer 2: Gradient Dark Overlay for Legibility */}
+        <div className="absolute inset-0 z-5 bg-gradient-to-r from-black/85 via-black/70 to-black/50 pointer-events-none" />
+
+        {/* Layer 3: Unblurred Poster on Left & Info on Right Thumbnail Preview Card (Fades out when video plays) */}
+        {!isPlaying && posterImage && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center p-4 sm:p-6 transition-opacity duration-300 w-full">
+            <div className="relative z-10 w-full flex items-center gap-3.5 sm:gap-5 min-w-0 max-w-md mx-auto">
+              {/* Left Side: Sharp Portrait Poster Card */}
+              <div className="relative shrink-0 aspect-[2/3] w-24 sm:w-32 md:w-36 rounded-xl sm:rounded-2xl overflow-hidden shadow-2xl border-2 border-white/25 ring-1 ring-black/50 group-hover:scale-103 transition-transform duration-300">
+                <img
+                  src={posterImage}
+                  alt={animeData?.title || "Anime Reel Thumbnail"}
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+
+              {/* Right Side: Anime Info & Action */}
+              <div className="flex-1 min-w-0 text-white flex flex-col justify-center gap-1.5 sm:gap-2">
+                {animeData?.title && (
+                  <h4 className="font-extrabold text-sm sm:text-base md:text-lg text-white leading-snug line-clamp-2 drop-shadow-md">
+                    {animeData.title}
+                  </h4>
+                )}
+                
+                <div className="flex items-center gap-1.5 flex-wrap text-xs font-semibold">
+                  <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-purple-600/90 to-indigo-600/90 text-white text-[10px] font-bold border border-white/20 shadow-xs">
+                    Reel HD
+                  </span>
+                  {animeData?.rating && (
+                    <span className="bg-white/15 px-1.5 py-0.5 rounded text-gray-200 text-[10px] border border-white/10 font-bold">
+                      {animeData.rating}
+                    </span>
+                  )}
+                  {animeData?.year && (
+                    <span className="text-gray-300 text-[11px] font-medium">
+                      {animeData.year}
+                    </span>
+                  )}
+                </div>
+
+                {/* Play Reel Action Button */}
+                <div className="mt-1 inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg border border-white/20 transition-all w-fit cursor-pointer group-hover:scale-105">
+                  <Play className="w-4 h-4 fill-white" />
+                  <span>Play Reel</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Video.js player root */}
         <div 
@@ -588,13 +648,6 @@ export default function SingleReelFeedCard({
           </div>
         )}
 
-        {/* Center Play / Pause Indicator (Icon ONLY - No border & No background) */}
-        {!isPlaying && !loadingStream && !loadingAnime && !streamError && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-            <Play className="w-16 h-16 sm:w-20 sm:h-20 text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.85)] fill-white transition-transform group-hover:scale-110 opacity-90" />
-          </div>
-        )}
-
         {/* Top Overlay Controls (Sound Toggle & Fullscreen) */}
         <div className="absolute top-3 right-3 z-30 flex items-center gap-2">
           {/* Mute / Unmute Button */}
@@ -621,15 +674,17 @@ export default function SingleReelFeedCard({
           )}
         </div>
 
-        {/* Bottom Floating Time Indicator inside Player (Title overlay removed) */}
-        <div className="absolute bottom-3 right-3 z-30 pointer-events-none">
-          <div className="bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/10 text-white text-[11px] font-bold">
-            <span>{formatTime(currentTime)} / {formatTime(duration)}</span>
+        {/* Bottom Floating Time Indicator inside Player - SHOWN ONLY WHEN PLAYING */}
+        {isPlaying && (
+          <div className="absolute bottom-3 right-3 z-30 pointer-events-none transition-opacity duration-300">
+            <div className="bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/10 text-white text-[11px] font-bold">
+              <span>{formatTime(currentTime)} / {formatTime(duration)}</span>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Video Scrubber Progress Bar */}
-        {duration > 0 && (
+        {/* Video Scrubber Progress Bar - SHOWN ONLY WHEN PLAYING */}
+        {isPlaying && duration > 0 && (
           <div 
             className="absolute bottom-0 left-0 right-0 z-30 h-1 bg-white/20 cursor-pointer"
             onClick={(e) => e.stopPropagation()}
