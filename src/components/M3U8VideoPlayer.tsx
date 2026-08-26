@@ -291,25 +291,70 @@ export default function M3U8VideoPlayer({
         onClick={togglePlay}
         playsInline
       >
-        {subtitles.map((sub, idx) => (
-          <track
-            key={idx}
-            src={`/api/m3u8-proxy?url=${encodeURIComponent(sub.file)}`}
-            label={sub.label || `Track ${idx + 1}`}
-            kind={sub.kind || "captions"}
-            srcLang={(sub.label || "en").substring(0, 2).toLowerCase()}
-            default={!!sub.default}
-          />
-        ))}
+        {subtitles
+          .filter((sub) => {
+            if (!sub.file || typeof sub.file !== "string") return false;
+            const lowerLabel = (sub.label || "").toLowerCase();
+            const lowerKind = (sub.kind || "").toLowerCase();
+            return lowerKind !== "thumbnails" && !lowerLabel.includes("thumbnail") && !lowerLabel.includes("sprite");
+          })
+          .map((sub, idx) => (
+            <track
+              key={idx}
+              src={`/api/m3u8-proxy?url=${encodeURIComponent(sub.file)}`}
+              label={sub.label || `Track ${idx + 1}`}
+              kind="subtitles"
+              srcLang={(sub.label || "en").substring(0, 2).toLowerCase()}
+              default={!!sub.default}
+            />
+          ))}
       </video>
 
-      {/* Loading Overlay */}
+      {/* Loading Skeleton Player Overlay */}
       {loading && (
-        <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-3 text-white z-20">
-          <Loader2 className="w-10 h-10 text-[#1877F2] animate-spin" />
-          <div className="text-center space-y-1">
-            <p className="font-bold text-sm">Loading Episode Stream...</p>
-            <p className="text-xs text-gray-400">EP {episode.number}: {episode.title}</p>
+        <div className="absolute inset-0 bg-gray-950 flex flex-col justify-between p-4 sm:p-6 z-20 select-none overflow-hidden">
+          {/* Ambient Shimmer Background */}
+          <div className="absolute inset-0 bg-gradient-to-tr from-gray-950 via-gray-900 to-black animate-pulse" />
+          
+          {/* Top Video Header Skeleton */}
+          <div className="relative z-10 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-white/10 animate-pulse" />
+              <div className="space-y-1">
+                <div className="h-3.5 w-32 rounded bg-white/20 animate-pulse" />
+                <div className="h-2.5 w-20 rounded bg-white/10 animate-pulse" />
+              </div>
+            </div>
+            <div className="h-6 w-20 rounded-full bg-white/10 animate-pulse" />
+          </div>
+
+          {/* Center Play Pulse & Stream Loader */}
+          <div className="relative z-10 flex flex-col items-center justify-center gap-3 my-auto">
+            <div className="w-16 h-16 rounded-full bg-black/60 border border-white/20 flex items-center justify-center shadow-2xl backdrop-blur-md">
+              <Loader2 className="w-8 h-8 text-[#1877F2] animate-spin" />
+            </div>
+            <div className="text-center space-y-1">
+              <p className="font-bold text-sm text-white">Loading Episode Stream...</p>
+              <p className="text-xs text-gray-400">EP {episode.number}: {episode.title}</p>
+            </div>
+          </div>
+
+          {/* Bottom Controls Bar Skeleton */}
+          <div className="relative z-10 space-y-2 pt-2">
+            <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
+              <div className="h-full bg-[#1877F2] w-1/3 animate-[pulse_1.5s_infinite]" />
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              <div className="flex items-center gap-3">
+                <div className="w-5 h-5 rounded bg-white/15 animate-pulse" />
+                <div className="w-5 h-5 rounded bg-white/15 animate-pulse" />
+                <div className="h-3 w-16 rounded bg-white/10 animate-pulse" />
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-5 w-12 rounded bg-white/15 animate-pulse" />
+                <div className="w-5 h-5 rounded bg-white/15 animate-pulse" />
+              </div>
+            </div>
           </div>
         </div>
       )}

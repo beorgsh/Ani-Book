@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Image, Smile, Video, X, Tag, Heart } from "lucide-react";
 
 interface CreatePostProps {
@@ -12,6 +12,26 @@ export default function CreatePost({ currentUser, onSubmitPost }: CreatePostProp
   const [imageInput, setImageInput] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showImageInput, setShowImageInput] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    try {
+      window.history.pushState({ modal: "anibook_create_post_modal" }, "");
+    } catch {
+      // ignore
+    }
+
+    const handlePopState = () => {
+      setIsOpen(false);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [isOpen]);
 
   // Available genre tags for user custom post
   const availableTags = ["Action", "Fantasy", "Adventure", "Comedy", "Sci-Fi", "Slice of Life"];
@@ -47,6 +67,9 @@ export default function CreatePost({ currentUser, onSubmitPost }: CreatePostProp
           alt={currentUser.name}
           className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-gray-100 shrink-0"
           referrerPolicy="no-referrer"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = "https://api.dicebear.com/9.x/adventurer/svg?seed=OtakuExplorer_MainUser&backgroundColor=b6e3f4";
+          }}
         />
         <button
           onClick={() => setIsOpen(true)}
@@ -110,6 +133,9 @@ export default function CreatePost({ currentUser, onSubmitPost }: CreatePostProp
                   alt={currentUser.name}
                   className="w-11 h-11 rounded-full object-cover border border-gray-100"
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "https://api.dicebear.com/9.x/adventurer/svg?seed=OtakuExplorer_MainUser&backgroundColor=b6e3f4";
+                  }}
                 />
                 <div>
                   <span className="block font-bold text-gray-900 text-sm leading-tight">

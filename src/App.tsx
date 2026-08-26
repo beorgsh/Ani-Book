@@ -22,25 +22,36 @@ function shuffleArray<T>(array: T[]): T[] {
 
 // Helper to get or set persistent user avatar in cookie, sessionStorage, and localStorage
 const getStoredUserAvatar = (): string => {
-  const defaultAvatar = "https://api.dicebear.com/7.x/adventurer/png?seed=OtakuExplorer_MainUser&backgroundColor=b6e3f4";
+  const defaultAvatar = "https://api.dicebear.com/9.x/adventurer/svg?seed=OtakuExplorer_MainUser&backgroundColor=b6e3f4";
   if (typeof window === "undefined") return defaultAvatar;
   try {
     // 1. Check cookies
     const cookieMatch = document.cookie.match(/(?:^|; )anibook_user_avatar=([^;]*)/);
     if (cookieMatch && cookieMatch[1]) {
-      const stored = decodeURIComponent(cookieMatch[1]);
+      let stored = decodeURIComponent(cookieMatch[1]);
+      if (stored.includes("/7.x/") || stored.includes("/png?")) {
+        stored = defaultAvatar;
+      }
       return stored.includes("backgroundColor") ? stored : `${stored}&backgroundColor=b6e3f4`;
     }
     // 2. Check sessionStorage
     const sessionAvatar = sessionStorage.getItem("anibook_user_avatar");
     if (sessionAvatar) {
-      return sessionAvatar.includes("backgroundColor") ? sessionAvatar : `${sessionAvatar}&backgroundColor=b6e3f4`;
+      let stored = sessionAvatar;
+      if (stored.includes("/7.x/") || stored.includes("/png?")) {
+        stored = defaultAvatar;
+      }
+      return stored.includes("backgroundColor") ? stored : `${stored}&backgroundColor=b6e3f4`;
     }
 
     // 3. Check localStorage
     const localAvatar = localStorage.getItem("anibook_user_avatar");
     if (localAvatar) {
-      return localAvatar.includes("backgroundColor") ? localAvatar : `${localAvatar}&backgroundColor=b6e3f4`;
+      let stored = localAvatar;
+      if (stored.includes("/7.x/") || stored.includes("/png?")) {
+        stored = defaultAvatar;
+      }
+      return stored.includes("backgroundColor") ? stored : `${stored}&backgroundColor=b6e3f4`;
     }
 
     // Save to localStorage, sessionStorage, and cookie
@@ -208,10 +219,34 @@ export default function App() {
     return fallback;
   };
 
-  // Primary API Data Fetching loop: supports Random Pages & Shuffling (Feed) or Chronological (Latest)
-  const fetchAnimeData = useCallback(async (isInitial: boolean = false) => {
-    if (loading) return;
-    setLoading(true);
+  const isFetchingRef = useRef<boolean>(false);
+
+  // Preload post images into browser cache seamlessly in idle time
+  const preloadPostImages = useCallback((postsToPreload: Post[]) => {
+    if (typeof window === "undefined") return;
+    const run = () => {
+      postsToPreload.forEach((p) => {
+        if (p.image) {
+          const img = new window.Image();
+          img.src = p.image;
+        }
+      });
+    };
+    if ("requestIdleCallback" in window) {
+      (window as any).requestIdleCallback(run);
+    } else {
+      setTimeout(run, 150);
+    }
+  }, []);
+
+  // Primary API Data Fetching loop: supports Random Pages & Shuffling (Feed) or Chronological (Latest) with proactive background preloading
+  const fetchAnimeData = useCallback(async (isInitial: boolean = false, isBackgroundPreload: boolean = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+
+    if (!isBackgroundPreload) {
+      setLoading(true);
+    }
     setError(null);
 
     try {
@@ -239,6 +274,9 @@ export default function App() {
         if (activeTab === "feed") {
           formattedPosts = shuffleArray(formattedPosts);
         }
+
+        // Cache images in background
+        preloadPostImages(formattedPosts);
 
         // Update total pages available from pagination metadata
         if (resData.pagination?.total_pages) {
@@ -271,12 +309,21 @@ export default function App() {
             setLatestHasMore(resData.data.length > 0);
           }
         }
+
+        // If this was an initial load or regular scroll batch, immediately preload the next 10 items in background
+        if (isInitial || !isBackgroundPreload) {
+          setTimeout(() => {
+            fetchAnimeData(false, true);
+          }, 300);
+        }
       } else {
         throw new Error(resData.error || "Malformed API response structure.");
       }
     } catch (err: any) {
       console.error("[FETCH ANIME ERROR]", err);
-      setError(err.message || "Failed to sync anime feed.");
+      if (!isBackgroundPreload) {
+        setError(err.message || "Failed to sync anime feed.");
+      }
       if (isInitial) {
         if (activeTab === "feed") {
           setFeedHasMore(false);
@@ -285,22 +332,26 @@ export default function App() {
         }
       }
     } finally {
-      setLoading(false);
+      isFetchingRef.current = false;
+      if (!isBackgroundPreload) {
+        setLoading(false);
+      }
     }
-  }, [activeTab, latestPage, maxTotalPages, loading]);
+  }, [activeTab, latestPage, maxTotalPages, preloadPostImages]);
 
   // When activeTab changes, load initial batch if empty
   useEffect(() => {
     const currentPosts = activeTab === "feed" ? feedPosts : latestPosts;
     if (currentPosts.length === 0) {
-      fetchAnimeData(true);
+      fetchAnimeData(true, false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   // Handler to manually randomize / shuffle feed
   const handleShuffleFeed = async () => {
-    if (loading) return;
+    if (loading || isFetchingRef.current) return;
+    isFetchingRef.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -334,23 +385,30 @@ export default function App() {
             setLatestHasMore(resData.data.length > 0);
           }
         }
+        preloadPostImages(formattedPosts);
+
+        // Preload next batch in background after refresh
+        setTimeout(() => {
+          fetchAnimeData(false, true);
+        }, 300);
       }
     } catch (err: any) {
       setError(err.message || "Failed to refresh feed.");
     } finally {
+      isFetchingRef.current = false;
       setLoading(false);
     }
   };
 
-  // Infinite scroll Intersection Observer hook
+  // High-performance Infinite scroll Intersection Observer with generous lookahead
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loading && posts.length > 0) {
-          fetchAnimeData(false);
+        if (entries[0].isIntersecting && hasMore && !isFetchingRef.current && posts.length > 0) {
+          fetchAnimeData(false, false);
         }
       },
-      { threshold: 0.1, rootMargin: "200px" }
+      { threshold: 0.01, rootMargin: "1200px" }
     );
 
     const currentSentinel = sentinelRef.current;
@@ -363,7 +421,7 @@ export default function App() {
         observer.unobserve(currentSentinel);
       }
     };
-  }, [hasMore, loading, posts.length, fetchAnimeData]);
+  }, [hasMore, posts.length, fetchAnimeData]);
 
   // Create local custom post from composer
   const handleCreatePostSubmit = (content: string, image?: string, tags?: string[]) => {

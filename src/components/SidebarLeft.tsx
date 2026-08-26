@@ -114,6 +114,9 @@ export default function SidebarLeft({
             alt={currentUser.name}
             className="w-10 h-10 rounded-full object-cover border border-gray-200 shadow-xs"
             referrerPolicy="no-referrer"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = "https://api.dicebear.com/9.x/adventurer/svg?seed=OtakuExplorer_MainUser&backgroundColor=b6e3f4";
+            }}
           />
           <div className="min-w-0">
             <span className="block text-sm font-bold text-gray-900 truncate">

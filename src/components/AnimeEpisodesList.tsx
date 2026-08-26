@@ -255,14 +255,14 @@ export default function AnimeEpisodesList({
             
             const HEX_BG_COLORS = ["b6e3f4", "d8b4fe", "fde047", "6ee7b7", "fbcfe8", "bae6fd", "ddd6fe", "bef264"];
             const bgHex = HEX_BG_COLORS[bgIndex];
-            const dicebearAvatarUrl = `https://api.dicebear.com/7.x/${selectedArtStyle}/png?seed=${encodeURIComponent(episodeUsername)}&backgroundColor=${bgHex}`;
+            const dicebearAvatarUrl = `https://api.dicebear.com/9.x/${selectedArtStyle}/svg?seed=${encodeURIComponent(episodeUsername)}&backgroundColor=${bgHex}`;
 
             return (
               <div
                 key={ep.id || `ep-${ep.number}`}
                 className="flex gap-2.5 items-start min-w-0 group"
               >
-                {/* Comment Avatar: DiceBear PNG Avatar with unique art style and colorful background backdrop */}
+                {/* Comment Avatar: DiceBear SVG Avatar with unique art style and colorful background backdrop */}
                 <div 
                   className={`relative shrink-0 mt-0.5 w-9.5 h-9.5 rounded-full flex items-center justify-center p-0.5 border shadow-2xs ${avatarBgClass} ${
                     isExactMatch ? "border-[#1877F2] ring-2 ring-blue-400 scale-105" : "border-gray-200/80"
@@ -274,6 +274,9 @@ export default function AnimeEpisodesList({
                     alt={episodeUsername}
                     className="w-full h-full rounded-full object-contain"
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = `https://api.dicebear.com/9.x/bottts/svg?seed=${encodeURIComponent(episodeUsername)}`;
+                    }}
                   />
                   {ep.isFiller && (
                     <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-amber-500 rounded-full border border-white" title="Filler episode" />

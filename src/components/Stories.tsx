@@ -190,6 +190,9 @@ export default function Stories({ currentUser }: StoriesProps) {
               alt={currentUser.name}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               referrerPolicy="no-referrer"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = "https://api.dicebear.com/9.x/adventurer/svg?seed=OtakuExplorer_MainUser&backgroundColor=b6e3f4";
+              }}
             />
           </div>
           <div className="relative flex-1 bg-white pt-4 sm:pt-5 pb-2 text-center flex flex-col justify-center">

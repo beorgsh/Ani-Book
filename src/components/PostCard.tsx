@@ -141,6 +141,9 @@ export default function PostCard({
               alt={studioDisplayName}
               className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-gray-100 shadow-sm"
               referrerPolicy="no-referrer"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = `https://api.dicebear.com/9.x/bottts/svg?seed=${encodeURIComponent(studioDisplayName)}`;
+              }}
             />
           </div>
           <div className="min-w-0 flex-1">

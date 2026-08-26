@@ -102,6 +102,28 @@ export default function ReelPlayerModal({
   const [isCommentsOpen, setIsCommentsOpen] = useState<boolean>(false);
   const [commentInput, setCommentInput] = useState<string>("");
 
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Handle phone back button / swipe back gesture without leaving website
+  useEffect(() => {
+    try {
+      window.history.pushState({ modal: "anibook_reel_modal" }, "");
+    } catch {
+      // ignore
+    }
+
+    const handlePopState = () => {
+      onCloseRef.current();
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, []);
+
   // Lock body scroll only while modal is mounted
   useEffect(() => {
     const prevBodyOverflow = document.body.style.overflow;
@@ -326,9 +348,12 @@ export default function ReelPlayerModal({
             <div className="flex-1 overflow-y-auto py-3 space-y-3">
               <div className="flex gap-2.5 items-start">
                 <img
-                  src="https://api.dicebear.com/7.x/adventurer/png?seed=SakuraOtaku&backgroundColor=ffb703"
+                  src="https://api.dicebear.com/9.x/adventurer/svg?seed=SakuraOtaku&backgroundColor=ffb703"
                   alt="User"
                   className="w-7 h-7 rounded-full object-cover border border-white/10"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "https://api.dicebear.com/9.x/bottts/svg?seed=SakuraOtaku";
+                  }}
                 />
                 <div className="bg-white/10 rounded-2xl px-3 py-2 text-xs text-white flex-1">
                   <span className="font-bold block text-blue-400">SakuraOtaku</span>
@@ -542,13 +567,20 @@ function SingleReelCard({
       ? `/api/m3u8-proxy?url=${encodeURIComponent(streamData.m3u8)}`
       : streamData.m3u8;
 
-    const tracks = (streamData.subtitles || []).map((sub: any) => ({
-      src: `/api/m3u8-proxy?url=${encodeURIComponent(sub.file)}`,
-      label: sub.label || "English",
-      kind: sub.kind || "captions",
-      srclang: (sub.label || "en").substring(0, 2).toLowerCase(),
-      default: !!sub.default
-    }));
+    const tracks = (streamData.subtitles || [])
+      .filter((sub: any) => {
+        if (!sub.file || typeof sub.file !== "string") return false;
+        const lowerLabel = (sub.label || "").toLowerCase();
+        const lowerKind = (sub.kind || "").toLowerCase();
+        return lowerKind !== "thumbnails" && !lowerLabel.includes("thumbnail") && !lowerLabel.includes("sprite");
+      })
+      .map((sub: any) => ({
+        src: `/api/m3u8-proxy?url=${encodeURIComponent(sub.file)}`,
+        label: sub.label || "English",
+        kind: "subtitles",
+        srclang: (sub.label || "en").substring(0, 2).toLowerCase(),
+        default: !!sub.default
+      }));
 
     videoContainerRef.current.innerHTML = "";
     const videoElement = document.createElement("video-js");
@@ -756,9 +788,36 @@ function SingleReelCard({
         className="relative w-full h-full flex items-center justify-center overflow-hidden cursor-pointer bg-gray-950"
         onClick={togglePlay}
       >
+        {/* Unified Stable Poster & Ambient Backdrop (Visible smoothly without flashing on swipe) */}
+        <div className="absolute inset-0 z-0 overflow-hidden bg-gray-950 pointer-events-none">
+          <div 
+            className="absolute inset-0 blur-3xl opacity-50 scale-125"
+            style={{
+              backgroundImage: `url(${posterUrl})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center"
+            }}
+          />
+          <img
+            src={posterUrl}
+            alt={reel.title}
+            className={`w-full h-full object-cover sm:object-contain transition-opacity duration-300 ${
+              isVideoReady && isActive ? "opacity-0" : "opacity-100"
+            }`}
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = FALLBACK_POSTER;
+            }}
+          />
+        </div>
+
         {/* Preloaded/Active Video.js Player Node */}
         {(isActive || isNearby) && (
-          <div data-vjs-player className={`w-full h-full items-center justify-center pointer-events-none ${isActive ? "flex" : "hidden"}`}>
+          <div 
+            data-vjs-player 
+            className={`w-full h-full items-center justify-center pointer-events-none relative z-10 ${
+              isActive ? "flex" : "hidden"
+            }`}
+          >
             <div ref={videoContainerRef} className="w-full h-full flex items-center justify-center pointer-events-none" />
           </div>
         )}
@@ -774,56 +833,16 @@ function SingleReelCard({
           />
         )}
 
-        {/* Smooth Poster & Ambient Blur Overlay - Remains solid until the video is loaded and decoded */}
-        <div 
-          className={`absolute inset-0 z-10 pointer-events-none transition-opacity duration-500 ease-out overflow-hidden ${
-            isVideoReady && !loadingStream && !streamError ? "opacity-0 pointer-events-none" : "opacity-100"
-          }`}
-        >
-          {/* Ambient Blurred Background Glow */}
-          <div 
-            className="absolute inset-0 blur-3xl opacity-60 scale-125"
-            style={{
-              backgroundImage: `url(${posterUrl})`,
-              backgroundSize: "cover",
-              backgroundPosition: "center"
-            }}
-          />
-          {/* Poster Image */}
-          <img
-            src={posterUrl}
-            alt={reel.title}
-            className="relative z-10 w-full h-full object-cover sm:object-contain"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = FALLBACK_POSTER;
-            }}
-          />
-        </div>
-
-        {/* Non-active Card Overlay */}
-        {!isActive && (
-          <div className="absolute inset-0 z-20 bg-black/40 flex flex-col items-center justify-center text-white gap-2 backdrop-blur-2xs transition-all hover:bg-black/20">
-            <div className="w-14 h-14 rounded-full bg-black/60 border border-white/30 backdrop-blur-md flex items-center justify-center shadow-xl">
-              <Play className="h-7 w-7 fill-white ml-1 text-white" />
-            </div>
-            <span className="text-xs font-bold drop-shadow">Tap to Play</span>
-          </div>
-        )}
-
-        {/* Loading Indicator */}
-        {isActive && loadingStream && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/50 backdrop-blur-xs text-white gap-3 pointer-events-none">
-            <Loader2 className="h-8 w-8 sm:h-9 sm:w-9 text-[#1877F2] animate-spin" />
-            <div className="text-center px-4">
-              <span className="block text-xs sm:text-sm font-bold truncate max-w-[200px] sm:max-w-xs">{reel.title}</span>
-              <span className="text-[10px] sm:text-xs text-gray-300">Loading 30s highlight clip...</span>
-            </div>
+        {/* Subtle, Non-Intrusive Top Progress Line when loading stream metadata (No blue circle with black bg) */}
+        {isActive && (loadingStream || !isVideoReady) && !streamError && (
+          <div className="absolute top-0 left-0 right-0 h-1 z-30 overflow-hidden bg-white/10 pointer-events-none">
+            <div className="h-full bg-[#1877F2] w-2/5 animate-[pulse_1s_ease-in-out_infinite]" />
           </div>
         )}
 
         {/* Stream Error Overlay */}
         {isActive && streamError && !loadingStream && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/80 p-6 text-white text-center gap-3">
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/80 p-6 text-white text-center gap-3">
             <AlertCircle className="h-9 w-9 text-amber-400" />
             <h4 className="text-xs sm:text-sm font-bold text-gray-200">Stream Currently Unavailable</h4>
             <p className="text-[11px] sm:text-xs text-gray-400 max-w-xs">{streamError}</p>

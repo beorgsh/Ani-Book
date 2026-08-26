@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowLeft,
@@ -81,6 +81,28 @@ export default function FacebookPhotoModal({
       onSelectPost(allPosts[currentIndex + 1]);
     }
   };
+
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Handle phone back button / swipe back gesture without leaving website
+  useEffect(() => {
+    try {
+      window.history.pushState({ modal: "anibook_photo_modal" }, "");
+    } catch {
+      // ignore
+    }
+
+    const handlePopState = () => {
+      onCloseRef.current();
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, []);
 
   // Keyboard navigation
   useEffect(() => {
@@ -465,6 +487,9 @@ export default function FacebookPhotoModal({
                   alt={currentUser.name}
                   className="w-7 h-7 rounded-full object-cover border border-gray-200 shrink-0"
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "https://api.dicebear.com/9.x/adventurer/svg?seed=OtakuExplorer_MainUser&backgroundColor=b6e3f4";
+                  }}
                 />
                 <div className="flex-1 relative">
                   <input
