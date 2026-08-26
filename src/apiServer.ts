@@ -420,6 +420,47 @@ export function createApiApp() {
     }
   });
 
+  // API Proxy Route for Genre animes: https://anikototvapi.vercel.app/api/genre/{genre}
+  app.get("/api/genre/:genre", async (req, res) => {
+    try {
+      const rawGenre = req.params.genre || "action";
+      const cleanGenre = rawGenre.toLowerCase().trim().replace(/[^a-z0-9-]+/g, "-");
+      const page = req.query.page ? String(req.query.page) : "1";
+
+      const targetUrl = `https://anikototvapi.vercel.app/api/genre/${encodeURIComponent(cleanGenre)}?page=${page}`;
+      console.log(`[API GENRE] Fetching genre '${cleanGenre}' page ${page} from: ${targetUrl}`);
+
+      const response = await fetch(targetUrl, {
+        headers: {
+          "Accept": "application/json",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        },
+        signal: AbortSignal.timeout(7000)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Genre API responded with status ${response.status}`);
+      }
+
+      const json = await response.json();
+      return res.json({
+        ok: true,
+        genre: cleanGenre,
+        page: parseInt(page, 10) || 1,
+        totalPages: json?.results?.totalPages || 1,
+        data: json?.results?.data || json?.data || [],
+        raw: json
+      });
+    } catch (error: any) {
+      console.error("[GENRE API ERROR]", error);
+      return res.status(500).json({
+        ok: false,
+        error: error.message || "Failed to fetch genre anime",
+        data: []
+      });
+    }
+  });
+
   // API Route for Random Anime Reels using recent anime posters directly
   app.get("/api/random-reels", async (req, res) => {
     try {
@@ -599,46 +640,278 @@ export function createApiApp() {
     }
   });
 
-  // API Stream Proxy for Anime M3U8 & subtitles
-  // Supports query: id (slug), server (hd-1 / hd-2), ep (1), type (sub / dub)
-  app.get("/api/stream", async (req, res) => {
-    try {
-      const slug = req.query.id || req.query.slug;
-      let server = (req.query.server as string) || "hd-1";
-      if (server === "hd1") server = "hd-1";
-      if (server === "hd2") server = "hd-2";
-      const ep = req.query.ep || "1";
-      const type = req.query.type === "dub" ? "dub" : "sub";
+  // Cache for MAL ID resolution
+  const malIdResolutionCache = new Map<string, string>();
 
-      if (!slug) {
-        return res.status(400).json({ success: false, error: "Missing anime slug/id parameter" });
-      }
-
-      const targetUrl = `https://anikoto-api.vercel.app/api/stream?id=${encodeURIComponent(String(slug))}&server=${encodeURIComponent(server)}&ep=${encodeURIComponent(String(ep))}&type=${encodeURIComponent(type)}`;
-      console.log(`[API STREAM] Requesting: ${targetUrl}`);
-
-      const response = await fetch(targetUrl, {
-        headers: {
-          "Accept": "application/json",
-          "Referer": "https://megaplay.buzz/",
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        },
-        signal: AbortSignal.timeout(8000)
-      });
-
-      if (!response.ok) {
-        throw new Error(`Stream upstream API returned status ${response.status}`);
-      }
-
-      const data = await response.json();
-      return res.json(data);
-    } catch (error: any) {
-      console.error("[API STREAM ERROR]", error);
-      return res.status(500).json({
-        success: false,
-        error: error.message || "Failed to fetch stream source"
-      });
+  async function resolveAnimeMalId(
+    directMalId?: string | number,
+    aniId?: string | number,
+    title?: string,
+    slug?: string
+  ): Promise<string | null> {
+    if (directMalId && String(directMalId).trim()) {
+      return String(directMalId).trim();
     }
+
+    const cleanAniId = aniId ? String(aniId).trim() : "";
+    const cleanTitle = title ? String(title).trim() : "";
+    const cleanSlug = slug ? String(slug).trim() : "";
+
+    const cacheKey = `${cleanAniId}__${cleanTitle}__${cleanSlug}`;
+    if (malIdResolutionCache.has(cacheKey)) {
+      return malIdResolutionCache.get(cacheKey)!;
+    }
+
+    // 1. Try resolving via AniList GraphQL with numeric ID
+    if (cleanAniId && /^\d+$/.test(cleanAniId)) {
+      try {
+        const gqlRes = await fetch("https://graphql.anilist.co", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify({
+            query: `query ($id: Int) { Media(id: $id, type: ANIME) { id idMal } }`,
+            variables: { id: parseInt(cleanAniId, 10) }
+          }),
+          signal: AbortSignal.timeout(3500)
+        });
+        if (gqlRes.ok) {
+          const gqlJson = await gqlRes.json();
+          const idMal = gqlJson?.data?.Media?.idMal;
+          if (idMal) {
+            const malStr = String(idMal);
+            malIdResolutionCache.set(cacheKey, malStr);
+            return malStr;
+          }
+        }
+      } catch {
+        // Fallthrough to title search
+      }
+    }
+
+    // 2. Try resolving via AniList GraphQL with Title / Slug Search
+    const searchTarget = cleanAnimeTitle(cleanTitle) || (cleanSlug ? cleanSlug.replace(/-/g, " ") : "");
+    if (searchTarget) {
+      try {
+        const gqlRes = await fetch("https://graphql.anilist.co", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify({
+            query: `query ($search: String) { Media(search: $search, type: ANIME) { id idMal } }`,
+            variables: { search: searchTarget }
+          }),
+          signal: AbortSignal.timeout(3500)
+        });
+        if (gqlRes.ok) {
+          const gqlJson = await gqlRes.json();
+          const idMal = gqlJson?.data?.Media?.idMal;
+          if (idMal) {
+            const malStr = String(idMal);
+            malIdResolutionCache.set(cacheKey, malStr);
+            return malStr;
+          }
+        }
+      } catch {
+        // Ignore error
+      }
+    }
+
+    return null;
+  }
+
+  // Fetch stream from anikoto-api.vercel.app
+  async function fetchAnikotoStream(slug: string, server: string, ep: string | number, type: string) {
+    const targetUrl = `https://anikoto-api.vercel.app/api/stream?id=${encodeURIComponent(String(slug))}&server=${encodeURIComponent(server)}&ep=${encodeURIComponent(String(ep))}&type=${encodeURIComponent(type)}`;
+    const response = await fetch(targetUrl, {
+      headers: {
+        "Accept": "application/json",
+        "Referer": "https://megaplay.buzz/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+      },
+      signal: AbortSignal.timeout(6000)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Anikoto ${server} returned status ${response.status}`);
+    }
+
+    const json = await response.json();
+    const m3u8 = json?.data?.m3u8 || json?.m3u8 || json?.sources?.[0]?.url || json?.data?.sources?.[0]?.url;
+    if (!m3u8) {
+      throw new Error(json?.error || `No m3u8 source in Anikoto ${server}`);
+    }
+
+    return {
+      success: true,
+      data: {
+        m3u8,
+        subtitles: json?.data?.subtitles || json?.subtitles || [],
+        intro: json?.data?.intro,
+        outro: json?.data?.outro,
+        server: server.toUpperCase(),
+        source: "anikoto"
+      }
+    };
+  }
+
+  // Fetch stream from aniapikoto.vercel.app/api/anineko/mal/:mal_id/:ep_number
+  async function fetchAninekoStream(malId: string | number, ep: string | number, type: string, preferServer: "HD-1" | "HD-2" = "HD-1") {
+    const targetUrl = `https://aniapikoto.vercel.app/api/anineko/mal/${encodeURIComponent(String(malId))}/${encodeURIComponent(String(ep))}`;
+    console.log(`[ANINEKO STREAM FETCH] Target: ${targetUrl} (Server pref: ${preferServer}, Type: ${type})`);
+
+    const response = await fetch(targetUrl, {
+      headers: {
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+      },
+      signal: AbortSignal.timeout(7000)
+    });
+
+    if (!response.ok) {
+      throw new Error(`AniNeko fallback returned HTTP ${response.status}`);
+    }
+
+    const json = await response.json();
+    if (!json.success || !json.data) {
+      throw new Error(json.error || "AniNeko returned unsuccessful response");
+    }
+
+    const data = json.data;
+    const ssubList: any[] = Array.isArray(data.ssub) ? data.ssub : [];
+    const subList: any[] = Array.isArray(data.sub) ? data.sub : [];
+    const dubList: any[] = Array.isArray(data.dub) ? data.dub : [];
+
+    let pool: any[] = [];
+    if (type === "dub") {
+      pool = dubList.length > 0 ? dubList : (ssubList.length > 0 ? ssubList : subList);
+    } else {
+      pool = ssubList.length > 0 ? ssubList : (subList.length > 0 ? subList : dubList);
+    }
+
+    if (pool.length === 0) {
+      throw new Error("No stream sources found in AniNeko response");
+    }
+
+    // Try matching the preferred server (HD-1 or HD-2)
+    let selected = pool.find((s: any) => String(s.serverName || "").toUpperCase() === preferServer.toUpperCase());
+    if (!selected) {
+      selected = pool[0];
+    }
+
+    const m3u8 = selected.m3u8;
+    if (!m3u8) {
+      throw new Error("Missing m3u8 URL in selected AniNeko stream");
+    }
+
+    const subtitles = (selected.subtitles || []).map((sub: any) => ({
+      file: sub.url,
+      label: sub.label || (sub.lang ? String(sub.lang).toUpperCase() : "English"),
+      kind: "subtitles",
+      default: true
+    }));
+
+    return {
+      success: true,
+      data: {
+        m3u8,
+        subtitles,
+        server: selected.serverName ? `AniNeko ${selected.serverName}` : "AniNeko",
+        source: "anineko",
+        malId: Number(malId),
+        title: data.title
+      }
+    };
+  }
+
+  // API Stream Proxy for Anime M3U8 & subtitles with Multi-Server Cascade & Auto Fallback
+  // Supports query: id/slug, malId/mal_id, aniId/ani_id, title, server (hd-1 / hd-2 / anineko-hd-1 / anineko-hd-2 / auto), ep (1), type (sub / dub)
+  app.get("/api/stream", async (req, res) => {
+    const slug = (req.query.id || req.query.slug || "") as string;
+    const directMalId = (req.query.malId || req.query.mal_id || "") as string;
+    const aniId = (req.query.aniId || req.query.ani_id || "") as string;
+    const title = (req.query.title || "") as string;
+    const rawServer = ((req.query.server as string) || "auto").toLowerCase();
+    const ep = (req.query.ep as string) || "1";
+    const type = req.query.type === "dub" ? "dub" : "sub";
+
+    if (!slug && !directMalId && !aniId && !title) {
+      return res.status(400).json({ success: false, error: "Missing anime slug, malId, or aniId parameter" });
+    }
+
+    console.log(`[API STREAM CASCADE] Request: slug='${slug}', malId='${directMalId}', server='${rawServer}', ep=${ep}, type=${type}`);
+
+    // If specific non-auto server is explicitly requested
+    if (rawServer === "hd-1" || rawServer === "hd1") {
+      try {
+        if (slug) {
+          const result = await fetchAnikotoStream(slug, "hd-1", ep, type);
+          return res.json(result);
+        }
+      } catch (err: any) {
+        console.warn("[API STREAM HD-1 FAILED, TRYING AUTO CASCADE]", err.message);
+      }
+    } else if (rawServer === "hd-2" || rawServer === "hd2") {
+      try {
+        if (slug) {
+          const result = await fetchAnikotoStream(slug, "hd-2", ep, type);
+          return res.json(result);
+        }
+      } catch (err: any) {
+        console.warn("[API STREAM HD-2 FAILED, TRYING AUTO CASCADE]", err.message);
+      }
+    } else if (rawServer.startsWith("anineko")) {
+      try {
+        const resolvedMal = await resolveAnimeMalId(directMalId, aniId, title, slug);
+        if (resolvedMal) {
+          const prefer = rawServer.includes("hd-2") || rawServer.includes("2") ? "HD-2" : "HD-1";
+          const result = await fetchAninekoStream(resolvedMal, ep, type, prefer);
+          return res.json(result);
+        }
+      } catch (err: any) {
+        console.warn("[API STREAM ANINEKO DIRECT FAILED]", err.message);
+      }
+    }
+
+    // Comprehensive Fallback Cascade:
+    // 1. Try Anikoto HD-1
+    if (slug) {
+      try {
+        const result = await fetchAnikotoStream(slug, "hd-1", ep, type);
+        return res.json(result);
+      } catch (err: any) {
+        console.log(`[CASCADE] HD-1 failed (${err.message}), trying HD-2...`);
+      }
+
+      // 2. Try Anikoto HD-2
+      try {
+        const result = await fetchAnikotoStream(slug, "hd-2", ep, type);
+        return res.json(result);
+      } catch (err: any) {
+        console.log(`[CASCADE] HD-2 failed (${err.message}), falling back to AniNeko...`);
+      }
+    }
+
+    // 3. Fallback to AniNeko (https://aniapikoto.vercel.app/api/anineko/mal/:mal_id/:ep_number)
+    try {
+      const resolvedMalId = await resolveAnimeMalId(directMalId, aniId, title, slug);
+      if (resolvedMalId) {
+        console.log(`[CASCADE] Resolved MAL ID: ${resolvedMalId}, fetching AniNeko HD-1...`);
+        try {
+          const result = await fetchAninekoStream(resolvedMalId, ep, type, "HD-1");
+          return res.json(result);
+        } catch (nekoErr1: any) {
+          console.log(`[CASCADE] AniNeko HD-1 failed (${nekoErr1.message}), trying AniNeko HD-2...`);
+          const result = await fetchAninekoStream(resolvedMalId, ep, type, "HD-2");
+          return res.json(result);
+        }
+      }
+    } catch (nekoErr: any) {
+      console.warn("[CASCADE] AniNeko fallback also failed:", nekoErr.message);
+    }
+
+    return res.status(500).json({
+      success: false,
+      error: `All stream servers (HD-1, HD-2, AniNeko) unavailable for Episode ${ep} (${type.toUpperCase()})`
+    });
   });
 
   // M3U8 Playlist & Media Segment Proxy with CORS and Referer header

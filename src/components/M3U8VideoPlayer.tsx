@@ -1,12 +1,13 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import Hls from "hls.js";
-import { Play, Pause, Volume2, VolumeX, Maximize, RotateCcw, AlertCircle, Loader2, Sparkles, Tv, Check } from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, Maximize, RotateCcw, AlertCircle, Loader2, Sparkles, Tv, Check, Server, Radio, ArrowRightLeft } from "lucide-react";
 import { AnimeEpisode } from "../types";
 
-interface M3U8VideoPlayerProps {
+export interface M3U8VideoPlayerProps {
   episode: AnimeEpisode;
   animeTitle?: string;
   aniId?: string | number;
+  malId?: string | number;
   slug?: string;
   poster?: string;
   onBackToImage?: () => void;
@@ -14,10 +15,18 @@ interface M3U8VideoPlayerProps {
   is_dub?: number;
 }
 
+const SERVER_ORDER = [
+  { id: "hd-1", label: "HD-1", provider: "Anikoto", badge: "HD 1" },
+  { id: "hd-2", label: "HD-2", provider: "Anikoto", badge: "HD 2" },
+  { id: "anineko-hd-1", label: "AniNeko 1", provider: "AniNeko (MAL)", badge: "AniNeko 1" },
+  { id: "anineko-hd-2", label: "AniNeko 2", provider: "AniNeko (MAL)", badge: "AniNeko 2" }
+];
+
 export default function M3U8VideoPlayer({
   episode,
   animeTitle = "Anime Episode",
   aniId = "21",
+  malId,
   slug = "one-piece",
   poster,
   onBackToImage,
@@ -38,8 +47,56 @@ export default function M3U8VideoPlayer({
   const [duration, setDuration] = useState(0);
   const [showControls, setShowControls] = useState(true);
 
+  // Server switching states
+  const [selectedServer, setSelectedServer] = useState<string>("auto");
+  const [activeServerName, setActiveServerName] = useState<string>("HD-1");
+  const [autoSwitchNotice, setAutoSwitchNotice] = useState<string | null>(null);
+  const [isServerMenuOpen, setIsServerMenuOpen] = useState(false);
+  const [retryAttemptCount, setRetryAttemptCount] = useState(0);
+
   // Derive target identifier for stream endpoint
   const targetId = slug || (aniId ? `anime-${aniId}` : "one-piece");
+
+  // Auto server failover index tracker
+  const currentFailoverIndexRef = useRef<number>(0);
+  const isAutoSwitchingRef = useRef<boolean>(false);
+
+  const switchServerAndRetry = useCallback((targetServerId: string, reason?: string) => {
+    if (reason) {
+      const serverObj = SERVER_ORDER.find(s => s.id === targetServerId);
+      const name = serverObj ? `${serverObj.label} (${serverObj.provider})` : targetServerId;
+      setAutoSwitchNotice(`⚡ ${reason} ➜ Auto-switching to ${name}...`);
+      setTimeout(() => {
+        setAutoSwitchNotice(null);
+      }, 4000);
+    }
+    setSelectedServer(targetServerId);
+    setRetryAttemptCount(prev => prev + 1);
+  }, []);
+
+  const triggerNextServerFailover = useCallback((failedServer: string) => {
+    if (isAutoSwitchingRef.current) return;
+    isAutoSwitchingRef.current = true;
+
+    // Find current index in SERVER_ORDER
+    let currIdx = SERVER_ORDER.findIndex(s => s.id === failedServer || failedServer.toLowerCase().includes(s.id.replace("-", "")));
+    if (currIdx === -1) currIdx = currentFailoverIndexRef.current;
+
+    const nextIdx = currIdx + 1;
+    if (nextIdx < SERVER_ORDER.length) {
+      currentFailoverIndexRef.current = nextIdx;
+      const nextServer = SERVER_ORDER[nextIdx];
+      console.log(`[STREAM AUTO SWITCH] Failover triggered: ${failedServer} failed. Switching to ${nextServer.id}`);
+      switchServerAndRetry(nextServer.id, `${failedServer.toUpperCase()} error`);
+    } else {
+      setError(`All stream servers (HD-1, HD-2, AniNeko) are currently unavailable for Episode ${episode.number}.`);
+      setLoading(false);
+    }
+
+    setTimeout(() => {
+      isAutoSwitchingRef.current = false;
+    }, 1500);
+  }, [episode.number, switchServerAndRetry]);
 
   useEffect(() => {
     let isMounted = true;
@@ -53,13 +110,13 @@ export default function M3U8VideoPlayer({
         const parsedDubCount = typeof is_dub === "number" ? is_dub : parseInt(String(is_dub || "0"), 10);
         if (parsedDubCount > 0 && episode.number > parsedDubCount) {
           if (isMounted) {
-            setError(`🎙️ English Dub for Episode ${episode.number} is unavailable. Only Episodes 1-${parsedDubCount} are dubbed for this series. Please toggle to SUB in the sidebar.`);
+            setError(`🎙️ English Dub for Episode ${episode.number} is unavailable. Only Episodes 1-${parsedDubCount} are dubbed for this series. Please toggle to SUB.`);
             setLoading(false);
           }
           return;
         } else if (!is_dub || parsedDubCount === 0) {
           if (isMounted) {
-            setError(`🎙️ Dub format is currently unavailable for Episode ${episode.number}. Please toggle the audio format to SUB in the sidebar.`);
+            setError(`🎙️ Dub format is currently unavailable for Episode ${episode.number}. Please toggle audio to SUB.`);
             setLoading(false);
           }
           return;
@@ -67,61 +124,47 @@ export default function M3U8VideoPlayer({
       }
 
       try {
-        // Try requesting stream source from server proxy with targetId or title slug
-        const candidates = [
-          targetId,
-          animeTitle ? animeTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") : null,
-          slug,
-          aniId ? `anime-${aniId}` : null
-        ].filter(Boolean) as string[];
+        const queryParams = new URLSearchParams({
+          id: targetId,
+          malId: malId ? String(malId) : "",
+          aniId: aniId ? String(aniId) : "",
+          title: animeTitle || "",
+          server: selectedServer,
+          ep: String(episode.number),
+          type: streamType
+        });
 
-        let foundM3u8: string | null = null;
-        let foundSubtitles: any[] = [];
-
-        for (const candidateSlug of Array.from(new Set(candidates))) {
-          if (!candidateSlug || foundM3u8) break;
-
-          try {
-            const res = await fetch(`/api/stream?id=${encodeURIComponent(candidateSlug)}&ep=${episode.number}&type=${streamType}`);
-            if (res.ok) {
-              const data = await res.json();
-              const rawUrl = 
-                data?.data?.m3u8 || 
-                data?.m3u8 || 
-                data?.result?.sources?.[0]?.url || 
-                data?.sources?.[0]?.url || 
-                data?.data?.sources?.[0]?.url;
-
-              if (rawUrl && typeof rawUrl === "string") {
-                foundM3u8 = rawUrl;
-                foundSubtitles = data?.data?.subtitles || data?.subtitles || [];
-                break;
-              }
-            }
-          } catch {
-            // Try next candidate
-          }
+        const res = await fetch(`/api/stream?${queryParams.toString()}`);
+        if (!res.ok) {
+          throw new Error(`Stream API returned status ${res.status}`);
         }
 
-        if (foundM3u8 && isMounted) {
-          const finalM3u8 = foundM3u8.includes(".m3u8")
-            ? `/api/m3u8-proxy?url=${encodeURIComponent(foundM3u8)}`
-            : foundM3u8;
+        const data = await res.json();
+        const rawUrl = 
+          data?.data?.m3u8 || 
+          data?.m3u8 || 
+          data?.result?.sources?.[0]?.url || 
+          data?.sources?.[0]?.url || 
+          data?.data?.sources?.[0]?.url;
+
+        if (rawUrl && typeof rawUrl === "string" && isMounted) {
+          const finalM3u8 = rawUrl.includes(".m3u8")
+            ? `/api/m3u8-proxy?url=${encodeURIComponent(rawUrl)}`
+            : rawUrl;
           setStreamUrl(finalM3u8);
-          setSubtitles(foundSubtitles);
+          setSubtitles(data?.data?.subtitles || data?.subtitles || []);
+          setActiveServerName(data?.data?.server || (selectedServer === "auto" ? "HD-1" : selectedServer.toUpperCase()));
           setLoading(false);
           return;
         }
 
-        if (isMounted) {
-          setError(`Episode ${episode.number} (${streamType.toUpperCase()}) stream source currently buffering or unavailable.`);
-          setLoading(false);
-        }
+        throw new Error(data?.error || "Stream returned empty source");
       } catch (err: any) {
-        console.warn("[M3U8 RESOLVER WARN]", err);
+        console.warn("[M3U8 RESOLVER FAILED]", err.message);
         if (isMounted) {
-          setError(`Stream playback error for Episode ${episode.number} (${streamType.toUpperCase()})`);
-          setLoading(false);
+          // If in auto mode or early server, auto switch to next fallback server
+          const currentTriedServer = selectedServer === "auto" ? "hd-1" : selectedServer;
+          triggerNextServerFailover(currentTriedServer);
         }
       }
     }
@@ -131,7 +174,7 @@ export default function M3U8VideoPlayer({
     return () => {
       isMounted = false;
     };
-  }, [episode.number, episode.id, targetId, streamType, is_dub]);
+  }, [episode.number, episode.id, targetId, malId, aniId, animeTitle, streamType, is_dub, selectedServer, retryAttemptCount, triggerNextServerFailover]);
 
   // Attach HLS stream to HTML5 Video element
   useEffect(() => {
@@ -160,17 +203,23 @@ export default function M3U8VideoPlayer({
 
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (data.fatal) {
-          console.warn("[HLS FATAL ERROR]", data.type);
+          console.warn("[HLS FATAL ERROR]", data.type, data.details);
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-              hls.startLoad();
+              // Network 404 or manifest load error on current server! Auto failover!
+              console.log("[HLS NETWORK ERROR] Auto-switching server fallback...");
+              triggerNextServerFailover(activeServerName);
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
-              hls.recoverMediaError();
+              try {
+                hls.recoverMediaError();
+              } catch {
+                triggerNextServerFailover(activeServerName);
+              }
               break;
             default:
               hls.destroy();
-              setError("Stream playback error");
+              triggerNextServerFailover(activeServerName);
               break;
           }
         }
@@ -189,7 +238,7 @@ export default function M3U8VideoPlayer({
         hlsRef.current = null;
       }
     };
-  }, [streamUrl]);
+  }, [streamUrl, activeServerName, triggerNextServerFailover]);
 
   // Auto-enable first/default subtitle track once metadata is loaded or when subtitles/streamUrl are changed
   useEffect(() => {
@@ -203,7 +252,6 @@ export default function M3U8VideoPlayer({
       for (let i = 0; i < textTracks.length; i++) {
         const track = textTracks[i];
         if (track.kind === "captions" || track.kind === "subtitles") {
-          // If the matching subtitle in subtitles array has default: true, or if no track has been activated yet
           const matchedSub = subtitles[i];
           if ((matchedSub && matchedSub.default) || !hasActivated) {
             track.mode = "showing";
@@ -218,7 +266,6 @@ export default function M3U8VideoPlayer({
     };
 
     video.addEventListener("loadedmetadata", handleTracksLoaded);
-    // Trigger immediately in case metadata is already loaded
     handleTracksLoaded();
 
     return () => {
@@ -287,6 +334,12 @@ export default function M3U8VideoPlayer({
             setDuration(videoRef.current.duration || 0);
           }
         }}
+        onError={() => {
+          if (!loading && streamUrl) {
+            console.log("[VIDEO TAG ERROR] Playback failed, auto-switching server...");
+            triggerNextServerFailover(activeServerName);
+          }
+        }}
         onEnded={() => setIsPlaying(false)}
         onClick={togglePlay}
         playsInline
@@ -309,6 +362,87 @@ export default function M3U8VideoPlayer({
             />
           ))}
       </video>
+
+      {/* Floating Auto-Switch Server Notification Banner */}
+      {autoSwitchNotice && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-blue-600/95 text-white px-3.5 py-1.5 rounded-full shadow-2xl backdrop-blur-md flex items-center gap-2 border border-white/20 animate-bounce text-xs font-semibold">
+          <ArrowRightLeft className="w-3.5 h-3.5 animate-spin" />
+          <span>{autoSwitchNotice}</span>
+        </div>
+      )}
+
+      {/* Top Floating Server Indicator & Switcher */}
+      <div className="absolute top-3 right-3 z-30 flex items-center gap-2">
+        <div className="relative">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsServerMenuOpen(!isServerMenuOpen);
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/60 hover:bg-black/80 text-white/90 text-[11px] font-medium border border-white/15 backdrop-blur-md transition-colors cursor-pointer shadow-lg"
+            title="Change Streaming Server"
+          >
+            <Server className="w-3 h-3 text-[#1877F2]" />
+            <span>Server: <strong className="text-white font-bold">{activeServerName}</strong></span>
+          </button>
+
+          {/* Server Selection Dropdown */}
+          {isServerMenuOpen && (
+            <div 
+              className="absolute top-full right-0 mt-1.5 w-52 bg-gray-900/95 border border-white/15 rounded-xl shadow-2xl backdrop-blur-md p-1.5 z-50 text-white flex flex-col gap-1 animate-scale-up"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-2 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-white/10 flex items-center justify-between">
+                <span>Select Server</span>
+                <span className="text-blue-400 lowercase font-normal">auto-failover on</span>
+              </div>
+
+              {SERVER_ORDER.map((srv) => {
+                const isSelected = selectedServer === srv.id || (selectedServer === "auto" && activeServerName.toLowerCase().includes(srv.id.replace("-", "")));
+                return (
+                  <button
+                    key={srv.id}
+                    onClick={() => {
+                      setIsServerMenuOpen(false);
+                      switchServerAndRetry(srv.id);
+                    }}
+                    className={`flex items-center justify-between px-2.5 py-2 rounded-lg text-left text-xs transition-colors cursor-pointer ${
+                      isSelected
+                        ? "bg-[#1877F2] text-white font-bold shadow-md"
+                        : "hover:bg-white/10 text-gray-200"
+                    }`}
+                  >
+                    <div className="flex flex-col">
+                      <span className="font-semibold">{srv.label}</span>
+                      <span className={`text-[10px] ${isSelected ? "text-blue-100" : "text-gray-400"}`}>{srv.provider}</span>
+                    </div>
+                    {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                  </button>
+                );
+              })}
+
+              <button
+                onClick={() => {
+                  setIsServerMenuOpen(false);
+                  currentFailoverIndexRef.current = 0;
+                  switchServerAndRetry("auto");
+                }}
+                className={`flex items-center justify-between px-2.5 py-2 rounded-lg text-left text-xs transition-colors cursor-pointer border-t border-white/10 mt-0.5 ${
+                  selectedServer === "auto"
+                    ? "bg-blue-600/30 text-blue-300 font-bold"
+                    : "hover:bg-white/10 text-gray-300"
+                }`}
+              >
+                <div className="flex flex-col">
+                  <span>Smart Auto Fallback</span>
+                  <span className="text-[10px] text-gray-400">HD-1 ➜ HD-2 ➜ AniNeko</span>
+                </div>
+                {selectedServer === "auto" && <Radio className="w-3.5 h-3.5 text-blue-400" />}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Loading Skeleton Player Overlay */}
       {loading && (
@@ -334,7 +468,9 @@ export default function M3U8VideoPlayer({
               <Loader2 className="w-8 h-8 text-[#1877F2] animate-spin" />
             </div>
             <div className="text-center space-y-1">
-              <p className="font-bold text-sm text-white">Loading Episode Stream...</p>
+              <p className="font-bold text-sm text-white">
+                Connecting to {selectedServer === "auto" ? "Stream Server..." : `${selectedServer.toUpperCase()}...`}
+              </p>
               <p className="text-xs text-gray-400">EP {episode.number}: {episode.title}</p>
             </div>
           </div>
@@ -359,16 +495,34 @@ export default function M3U8VideoPlayer({
         </div>
       )}
 
-      {/* Error Overlay */}
+      {/* Error Overlay with Server Selection Fallbacks */}
       {error && !loading && (
-        <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center gap-3 text-white z-20 p-4">
-          <AlertCircle className="w-10 h-10 text-amber-500" />
-          <p className="text-sm font-bold">{error}</p>
+        <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center gap-3 text-white z-20 p-6 text-center">
+          <AlertCircle className="w-12 h-12 text-amber-500" />
+          <p className="text-sm font-bold max-w-sm">{error}</p>
+          
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+            {SERVER_ORDER.map((srv) => (
+              <button
+                key={srv.id}
+                onClick={() => switchServerAndRetry(srv.id)}
+                className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5"
+              >
+                <Server className="w-3 h-3 text-blue-400" />
+                <span>Try {srv.label}</span>
+              </button>
+            ))}
+          </div>
+
           <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-[#1877F2] text-white rounded-full text-xs font-bold hover:bg-blue-600 transition-colors"
+            onClick={() => {
+              currentFailoverIndexRef.current = 0;
+              switchServerAndRetry("auto");
+            }}
+            className="px-5 py-2 bg-[#1877F2] text-white rounded-full text-xs font-bold hover:bg-blue-600 transition-colors shadow-lg mt-2 flex items-center gap-1.5"
           >
-            Retry Stream
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Retry Auto-Fallback (HD-1 ➜ HD-2 ➜ AniNeko)</span>
           </button>
         </div>
       )}
@@ -485,9 +639,15 @@ export default function M3U8VideoPlayer({
               </div>
             )}
 
-            <span className="bg-red-600/80 text-white font-extrabold text-[9px] px-1.5 py-0.5 rounded tracking-wider">
-              HLS M3U8
-            </span>
+            <button
+              onClick={() => setIsServerMenuOpen(!isServerMenuOpen)}
+              className="bg-blue-600/80 hover:bg-blue-600 text-white font-bold text-[9px] px-2 py-1 rounded tracking-wider flex items-center gap-1 cursor-pointer transition-colors"
+              title="Streaming Server"
+            >
+              <Server className="w-2.5 h-2.5" />
+              <span>{activeServerName}</span>
+            </button>
+
             <button 
               onClick={toggleFullscreen} 
               className="hover:text-blue-400 transition-colors cursor-pointer"

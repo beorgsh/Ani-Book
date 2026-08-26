@@ -1,15 +1,36 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import Header from "./components/Header";
-import SidebarLeft from "./components/SidebarLeft";
+import SidebarLeft, { ALL_GENRES } from "./components/SidebarLeft";
 import Stories from "./components/Stories";
 import CreatePost from "./components/CreatePost";
 import PostCard from "./components/PostCard";
 import ReelsSection from "./components/ReelsSection";
+import SingleReelFeedCard from "./components/SingleReelFeedCard";
 import FeedSkeleton from "./components/FeedSkeleton";
 import FacebookPhotoModal from "./components/FacebookPhotoModal";
 import ExitConfirmModal from "./components/ExitConfirmModal";
+import SettingsModal from "./components/SettingsModal";
 import { Post, Comment, ApiResponse, AnimeItem, AnimeEpisode } from "./types";
-import { Sparkles, RefreshCw, AlertTriangle, Shuffle, Clock, Compass } from "lucide-react";
+import { 
+  Sparkles, 
+  RefreshCw, 
+  AlertTriangle, 
+  Heart, 
+  Dices, 
+  Bookmark,
+  Layers
+} from "lucide-react";
+import { 
+  getLikedAnimeList, 
+  getLikedAnimeIds, 
+  toggleAnimeLike 
+} from "./utils/cookieLikes";
+import { 
+  getReelSettings, 
+  saveReelSettings, 
+  ReelSettings 
+} from "./utils/reelSettings";
 
 // Fisher-Yates array shuffle algorithm
 function shuffleArray<T>(array: T[]): T[] {
@@ -67,17 +88,41 @@ const getStoredUserAvatar = (): string => {
 };
 
 export default function App() {
-  // Main content active tab: "feed" (default with random pages & shuffle) vs "latest" (chronological)
-  const [activeTab, setActiveTab] = useState<"feed" | "latest">("feed");
+  // Main content active tab: "feed" | "latest" | "liked" | "genre"
+  const [activeTab, setActiveTab] = useState<"feed" | "latest" | "liked" | "genre">("feed");
   
   const [feedPosts, setFeedPosts] = useState<Post[]>([]);
   const [latestPosts, setLatestPosts] = useState<Post[]>([]);
+  const [likedPosts, setLikedPosts] = useState<Post[]>(() => getLikedAnimeList());
+  const [genrePosts, setGenrePosts] = useState<Post[]>([]);
+  
   const [feedHasMore, setFeedHasMore] = useState<boolean>(true);
   const [latestHasMore, setLatestHasMore] = useState<boolean>(true);
+  const [genreHasMore, setGenreHasMore] = useState<boolean>(true);
+
+  // Genre pagination & metadata
+  const [genrePage, setGenrePage] = useState<number>(1);
+  const [genreTotalPages, setGenreTotalPages] = useState<number>(1);
+  const [genreLoading, setGenreLoading] = useState<boolean>(false);
 
   // Derived active state
-  const posts = activeTab === "feed" ? feedPosts : latestPosts;
-  const hasMore = activeTab === "feed" ? feedHasMore : latestHasMore;
+  const posts = 
+    activeTab === "feed" 
+      ? feedPosts 
+      : activeTab === "latest" 
+        ? latestPosts 
+        : activeTab === "liked" 
+          ? likedPosts 
+          : genrePosts;
+
+  const hasMore = 
+    activeTab === "feed" 
+      ? feedHasMore 
+      : activeTab === "latest" 
+        ? latestHasMore 
+        : activeTab === "liked" 
+          ? false 
+          : genreHasMore;
 
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,6 +131,16 @@ export default function App() {
   const [maxTotalPages, setMaxTotalPages] = useState<number>(890); // default based on ~8,900 anime library
   const [latestPage, setLatestPage] = useState<number>(1);
   const usedFeedPages = useRef<Set<number>>(new Set());
+
+  // Reel Video Settings state (saved in localStorage / cookies)
+  const [reelSettings, setReelSettings] = useState<ReelSettings>(() => getReelSettings());
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
+
+  const handleUpdateReelSettings = (newSettings: ReelSettings) => {
+    setReelSettings(newSettings);
+    saveReelSettings(newSettings);
+    triggerToast(`Reel settings: ${newSettings.enabled ? (newSettings.autoplay ? "Auto-play on" : "Tap to play") : "Disabled"} (every ${newSettings.frequency} posts)`);
+  };
 
   // Filter and search states
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -153,22 +208,24 @@ export default function App() {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
-    }, 3000);
+    }, 3200);
   };
 
-  // Convert raw API recent anime item into AniBook styled Post
-  const formatAnimeToPost = (item: AnimeItem): Post => {
+  // Convert raw API recent anime item into AniBook styled Post with cookie like check
+  const formatAnimeToPost = useCallback((item: AnimeItem): Post => {
     const studioList = item.terms_by_type?.studios || item.terms_by_type?.producers || [];
     const studioName = studioList.length > 0 ? studioList[0] : "AniBook Studio";
 
-    // Landscape backdrop detection:
-    // 1. If background_image from JSON is a non-empty string, use it
-    // 2. Otherwise use ani_id from JSON to fetch the AniList backdrop (https://img.anili.st/media/{ani_id})
     const rawBg = item.background_image && item.background_image.trim().length > 0 ? item.background_image.trim() : undefined;
     const aniIdStr = item.ani_id ? item.ani_id.toString().trim() : undefined;
     const anilistBackdrop = aniIdStr && !isNaN(Number(aniIdStr)) && Number(aniIdStr) > 0 ? `https://img.anili.st/media/${aniIdStr}` : undefined;
     const landscapeBackdrop = rawBg || item.backdrop || anilistBackdrop || item.banner_image || (item as any).banner || undefined;
     const fallbackPoster = item.poster || (item as any).cover || (item as any).image || (item as any).thumbnail || "";
+
+    const rawId = item.id.toString();
+    const rawSlug = item.slug || (item as any).slug_name;
+    const likedIds = getLikedAnimeIds();
+    const isLiked = likedIds.has(rawId) || (rawSlug && likedIds.has(rawSlug)) || likedIds.has(item.title);
 
     // Preset social comments
     const presetComments: Comment[] = [
@@ -208,7 +265,7 @@ export default function App() {
       likesCount: Math.abs((item.id * 7) % 650) + 15,
       commentsCount: presetComments.length,
       sharesCount: Math.abs((item.id * 2) % 180) + 3,
-      isLikedByUser: false,
+      isLikedByUser: isLiked,
       commentsList: presetComments,
       type: item.terms_by_type?.type?.[0] || "ONA",
       episodes: item.episodes || "?",
@@ -218,7 +275,61 @@ export default function App() {
       year: item.year || (item.aired ? item.aired.match(/\d{4}/)?.[0] : "2026"),
       aired: item.aired || (item.year ? String(item.year) : "2026")
     };
-  };
+  }, []);
+
+  // Format items from https://anikototvapi.vercel.app/api/genre/{genre} into AniBook Posts
+  const formatGenreItemToPost = useCallback((item: any, genreName: string, likedIds: Set<string>): Post => {
+    const animeId = item.animeId ? String(item.animeId) : String(Math.floor(Math.random() * 10000));
+    const rawSlug = item.slug ? String(item.slug).split("/")[0] : "";
+    const isLiked = likedIds.has(animeId) || (rawSlug && likedIds.has(rawSlug)) || likedIds.has(item.title);
+    const rating = item.rating && item.rating !== "0" ? item.rating : "7.8";
+    const totalEps = item.total || item.sub || 12;
+    const posterUrl = item.poster || "";
+
+    const displayGenre = genreName.charAt(0).toUpperCase() + genreName.slice(1);
+
+    return {
+      id: `genre-${genreName}-${animeId}`,
+      slug: rawSlug,
+      title: item.title || "Anime Title",
+      japaneseTitle: item.japaneseTitle || item.name || undefined,
+      avatar: posterUrl || "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=100&q=80",
+      isVerified: true,
+      timestamp: item.type ? `${item.type} · ${rating} ★` : "Anime Series",
+      content: `${item.title} (${item.japaneseTitle || item.title}) · Rated ${rating} ★ with ${totalEps} episodes. Official release in the ${displayGenre} Anime Guild on AniBook.`,
+      image: posterUrl,
+      bannerImage: posterUrl,
+      backdrop: posterUrl,
+      posterImage: posterUrl,
+      mal_id: item.mal_id ? String(item.mal_id) : undefined,
+      ani_id: item.ani_id ? String(item.ani_id) : undefined,
+      genreTags: [displayGenre, item.type || "TV"],
+      studio: `${displayGenre} Guild`,
+      isCustom: false,
+      isGenre: true,
+      rating: rating,
+      likesCount: Math.abs((parseInt(animeId || "1", 10) * 17) % 480) + 30,
+      commentsCount: 2,
+      sharesCount: Math.abs((parseInt(animeId || "1", 10) * 4) % 90) + 6,
+      isLikedByUser: isLiked,
+      commentsList: [
+        {
+          id: `c1-${animeId}`,
+          authorName: "AniBook Guild Master",
+          authorAvatar: "https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=80&q=80",
+          text: `Top pick for ${displayGenre} otakus! Rating: ${rating} ★ · Tap to watch episodes or explore clips! 🔥`,
+          timestamp: "2h ago"
+        }
+      ],
+      type: item.type || "TV",
+      episodes: String(totalEps),
+      status: "Available",
+      is_sub: item.sub || totalEps,
+      is_dub: item.dub || 0,
+      year: "2026",
+      aired: "2026"
+    };
+  }, []);
 
   // Helper to pick a random unused page number from the 8,000+ library pool
   const getRandomPage = (maxPages: number): number => {
@@ -258,13 +369,14 @@ export default function App() {
     if ("requestIdleCallback" in window) {
       (window as any).requestIdleCallback(run);
     } else {
-      setTimeout(run, 150);
+      setTimeout(run, 100);
     }
   }, []);
 
-  // Primary API Data Fetching loop: supports Random Pages & Shuffling (Feed) or Chronological (Latest) with proactive background preloading
+  // Fetch anime data for main feeds (feed / latest)
   const fetchAnimeData = useCallback(async (isInitial: boolean = false, isBackgroundPreload: boolean = false) => {
-    if (isFetchingRef.current) return;
+    if (activeTab === "liked" || activeTab === "genre") return;
+    if (isFetchingRef.current && !isBackgroundPreload) return;
     isFetchingRef.current = true;
 
     if (!isBackgroundPreload) {
@@ -307,22 +419,22 @@ export default function App() {
         }
 
         if (activeTab === "feed") {
-          setFeedPosts((prevPosts) => {
+          setFeedPosts((prevPosts: Post[]) => {
             if (isInitial) {
               return formattedPosts;
             }
-            const existingIds = new Set(prevPosts.map((p) => p.id));
-            const uniqueNewPosts = formattedPosts.filter((p) => !existingIds.has(p.id));
+            const existingIds = new Set<string>(prevPosts.map((p: Post) => p.id));
+            const uniqueNewPosts = formattedPosts.filter((p: Post) => !existingIds.has(p.id));
             return [...prevPosts, ...uniqueNewPosts];
           });
           setFeedHasMore(true);
         } else {
-          setLatestPosts((prevPosts) => {
+          setLatestPosts((prevPosts: Post[]) => {
             if (isInitial) {
               return formattedPosts;
             }
-            const existingIds = new Set(prevPosts.map((p) => p.id));
-            const uniqueNewPosts = formattedPosts.filter((p) => !existingIds.has(p.id));
+            const existingIds = new Set<string>(prevPosts.map((p: Post) => p.id));
+            const uniqueNewPosts = formattedPosts.filter((p: Post) => !existingIds.has(p.id));
             return [...prevPosts, ...uniqueNewPosts];
           });
           setLatestPage(targetPage + 1);
@@ -333,7 +445,7 @@ export default function App() {
           }
         }
 
-        // If this was an initial load or regular scroll batch, immediately preload the next 10 items in background
+        // If this was an initial load or regular scroll batch, preload next items
         if (isInitial || !isBackgroundPreload) {
           setTimeout(() => {
             fetchAnimeData(false, true);
@@ -360,25 +472,97 @@ export default function App() {
         setLoading(false);
       }
     }
-  }, [activeTab, latestPage, maxTotalPages, preloadPostImages]);
+  }, [activeTab, latestPage, maxTotalPages, preloadPostImages, formatAnimeToPost]);
+
+  // Fetch anime by genre from https://anikototvapi.vercel.app/api/genre/{genre}
+  const fetchGenreData = useCallback(async (genreSlug: string, targetPage: number = 1, isInitial: boolean = false) => {
+    if (!genreSlug) return;
+    if (isFetchingRef.current && !isInitial) return;
+    isFetchingRef.current = true;
+
+    if (isInitial) {
+      setGenreLoading(true);
+      setLoading(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    setError(null);
+
+    try {
+      const cleanGenre = genreSlug.toLowerCase().trim().replace(/[^a-z0-9-]+/g, "-");
+      const response = await fetch(`/api/genre/${encodeURIComponent(cleanGenre)}?page=${targetPage}`);
+      
+      if (!response.ok) {
+        throw new Error(`Genre API returned error status: ${response.status}`);
+      }
+
+      const resData = await response.json();
+      if (resData.ok && Array.isArray(resData.data)) {
+        const likedIds = getLikedAnimeIds();
+        const formatted = resData.data.map((item: any) => formatGenreItemToPost(item, cleanGenre, likedIds));
+        
+        preloadPostImages(formatted);
+
+        setGenreTotalPages(resData.totalPages || 1);
+        setGenrePage(targetPage);
+        setGenreHasMore(targetPage < (resData.totalPages || 1) && resData.data.length > 0);
+
+        setGenrePosts((prev: Post[]) => {
+          if (isInitial) return formatted;
+          const existingIds = new Set<string>(prev.map((p: Post) => p.id));
+          const unique = formatted.filter((p: Post) => !existingIds.has(p.id));
+          return [...prev, ...unique];
+        });
+      } else {
+        throw new Error("No anime found for this genre.");
+      }
+    } catch (err: any) {
+      console.error("[FETCH GENRE ERROR]", err);
+      setError(err.message || "Failed to load genre anime.");
+      if (isInitial) setGenreHasMore(false);
+    } finally {
+      isFetchingRef.current = false;
+      setGenreLoading(false);
+      setLoading(false);
+    }
+  }, [formatGenreItemToPost, preloadPostImages]);
 
   // When activeTab changes, load initial batch if empty
   useEffect(() => {
-    const currentPosts = activeTab === "feed" ? feedPosts : latestPosts;
-    if (currentPosts.length === 0) {
-      fetchAnimeData(true, false);
+    if (activeTab === "feed" || activeTab === "latest") {
+      const currentPosts = activeTab === "feed" ? feedPosts : latestPosts;
+      if (currentPosts.length === 0) {
+        fetchAnimeData(true, false);
+      }
+    } else if (activeTab === "genre" && selectedGenre) {
+      if (genrePosts.length === 0) {
+        fetchGenreData(selectedGenre, 1, true);
+      }
+    } else if (activeTab === "liked") {
+      // Re-read liked posts from cookies/localStorage to ensure perfect synchronization
+      setLikedPosts(getLikedAnimeList());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
+  // When selectedGenre is chosen, automatically activate genre tab and fetch
+  useEffect(() => {
+    if (selectedGenre) {
+      setActiveTab("genre");
+      fetchGenreData(selectedGenre, 1, true);
+    }
+  }, [selectedGenre, fetchGenreData]);
+
   // Tab change handler with history recording
-  const handleTabChange = useCallback((newTab: "feed" | "latest") => {
+  const handleTabChange = useCallback((newTab: "feed" | "latest" | "liked" | "genre") => {
     if (newTab === activeTabRef.current) {
       if (newTab === "feed") {
         window.scrollTo({ top: 0, behavior: "smooth" });
         handleShuffleFeed();
       }
       return;
+    }
+    if (newTab !== "genre") {
+      setSelectedGenre("");
     }
     setActiveTab(newTab);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -392,9 +576,7 @@ export default function App() {
   // Browser / Hardware Back Navigation & Exit Confirmation Interceptor
   useEffect(() => {
     try {
-      // Initialize base root history state
       window.history.replaceState({ anibook_root: true, anibook_tab: "feed" }, "");
-      // Push history barrier entry so first back press triggers popstate rather than exiting browser immediately
       window.history.pushState({ anibook_page: "feed", anibook_tab: "feed" }, "");
     } catch {
       // ignore
@@ -424,8 +606,9 @@ export default function App() {
       // 4. If an active genre or search filter is set, clear it first
       if (selectedGenreRef.current) {
         setSelectedGenre("");
+        setActiveTab("feed");
         try {
-          window.history.pushState({ anibook_page: activeTabRef.current, anibook_tab: activeTabRef.current }, "");
+          window.history.pushState({ anibook_page: "feed", anibook_tab: "feed" }, "");
         } catch {}
         return;
       }
@@ -437,8 +620,8 @@ export default function App() {
         return;
       }
 
-      // 5. If user is currently on 'latest' tab, back navigation returns to 'feed' (the default tab)
-      if (activeTabRef.current === "latest") {
+      // 5. If user is currently on another tab, back navigation returns to 'feed'
+      if (activeTabRef.current !== "feed") {
         setActiveTab("feed");
         try {
           window.history.pushState({ anibook_page: "feed", anibook_tab: "feed" }, "");
@@ -446,13 +629,11 @@ export default function App() {
         return;
       }
 
-      // 6. If user is on 'feed' (the default root view) and there are no other views/modals to go back to:
-      // Show the exit confirmation modal
-      setShowExitModal(true);
+      // 6. If user is on 'feed' (the default root view), show the exit confirmation modal
       try {
-        // Re-push barrier state so the web app doesn't close abruptly while the user decides in the modal
         window.history.pushState({ anibook_page: "feed", anibook_tab: "feed" }, "");
       } catch {}
+      setShowExitModal(true);
     };
 
     window.addEventListener("popstate", handlePopState);
@@ -461,10 +642,9 @@ export default function App() {
     };
   }, []);
 
-  // Handle explicit confirmation to exit AniBook
+  // Exit application action
   const handleConfirmExit = () => {
     setShowExitModal(false);
-    triggerToast("Exiting AniBook...");
     try {
       if (window.history.length > 2) {
         window.history.go(-2);
@@ -472,21 +652,25 @@ export default function App() {
         window.close();
       }
     } catch {
-      window.location.href = "about:blank";
+      window.close();
     }
   };
 
-  // Handler to manually randomize / shuffle feed
+  // Dedicated Shuffle feed action
   const handleShuffleFeed = async () => {
-    if (loading || isFetchingRef.current) return;
+    if (isFetchingRef.current) return;
     isFetchingRef.current = true;
     setLoading(true);
     setError(null);
+
     try {
       let targetPage = 1;
       if (activeTab === "feed") {
-        usedFeedPages.current.clear();
         targetPage = getRandomPage(maxTotalPages);
+      } else if (activeTab === "genre" && selectedGenre) {
+        targetPage = Math.floor(Math.random() * Math.min(5, genreTotalPages)) + 1;
+        fetchGenreData(selectedGenre, targetPage, true);
+        return;
       } else {
         targetPage = 1;
       }
@@ -515,7 +699,6 @@ export default function App() {
         }
         preloadPostImages(formattedPosts);
 
-        // Preload next batch in background after refresh
         setTimeout(() => {
           fetchAnimeData(false, true);
         }, 300);
@@ -528,12 +711,16 @@ export default function App() {
     }
   };
 
-  // High-performance Infinite scroll Intersection Observer with generous lookahead
+  // High-performance Infinite scroll Intersection Observer
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMore && !isFetchingRef.current && posts.length > 0) {
-          fetchAnimeData(false, false);
+          if (activeTab === "genre" && selectedGenre) {
+            fetchGenreData(selectedGenre, genrePage + 1, false);
+          } else if (activeTab === "feed" || activeTab === "latest") {
+            fetchAnimeData(false, false);
+          }
         }
       },
       { threshold: 0.01, rootMargin: "1200px" }
@@ -549,7 +736,7 @@ export default function App() {
         observer.unobserve(currentSentinel);
       }
     };
-  }, [hasMore, posts.length, fetchAnimeData]);
+  }, [hasMore, posts.length, activeTab, selectedGenre, genrePage, fetchAnimeData, fetchGenreData]);
 
   // Create local custom post from composer
   const handleCreatePostSubmit = (content: string, image?: string, tags?: string[]) => {
@@ -577,16 +764,25 @@ export default function App() {
     triggerToast("✨ Your anime post was shared!");
   };
 
-  // Interactive Like toggle handler
+  // Interactive Like toggle handler with COOKIE PERSISTENCE
   const handleLikeToggle = (postId: string) => {
+    // Look up target post across all active collections
+    const allCollections = [...feedPosts, ...latestPosts, ...genrePosts, ...likedPosts];
+    const targetPost = allCollections.find((p) => p.id === postId);
+    if (!targetPost) return;
+
+    // Toggle in cookies & storage
+    const { isLiked, allLiked } = toggleAnimeLike(targetPost);
+    setLikedPosts(allLiked);
+
+    // Synchronize isLiked state across all post collections
     const updater = (prevPosts: Post[]) =>
       prevPosts.map((post) => {
-        if (post.id === postId) {
-          const nextLiked = !post.isLikedByUser;
+        if (post.id === postId || (targetPost.slug && post.slug === targetPost.slug) || (post.title && post.title === targetPost.title)) {
           return {
             ...post,
-            isLikedByUser: nextLiked,
-            likesCount: nextLiked ? post.likesCount + 1 : post.likesCount - 1
+            isLikedByUser: isLiked,
+            likesCount: isLiked ? post.likesCount + 1 : Math.max(0, post.likesCount - 1)
           };
         }
         return post;
@@ -594,6 +790,21 @@ export default function App() {
 
     setFeedPosts(updater);
     setLatestPosts(updater);
+    setGenrePosts(updater);
+
+    if (selectedPhotoPost && (selectedPhotoPost.id === postId || selectedPhotoPost.title === targetPost.title)) {
+      setSelectedPhotoPost({
+        ...selectedPhotoPost,
+        isLikedByUser: isLiked,
+        likesCount: isLiked ? selectedPhotoPost.likesCount + 1 : Math.max(0, selectedPhotoPost.likesCount - 1)
+      });
+    }
+
+    triggerToast(
+      isLiked 
+        ? `❤️ Liked "${targetPost.title}"! Saved in browser cookies.` 
+        : `Removed "${targetPost.title}" from Liked Anime.`
+    );
   };
 
   // Add Comment handler
@@ -620,6 +831,7 @@ export default function App() {
 
     setFeedPosts(updater);
     setLatestPosts(updater);
+    setGenrePosts(updater);
     triggerToast("💬 Comment posted!");
   };
 
@@ -638,12 +850,12 @@ export default function App() {
 
     setFeedPosts(updater);
     setLatestPosts(updater);
+    setGenrePosts(updater);
     triggerToast("🌐 Shared to your AniBook timeline!");
   };
 
   // Open full episode details modal from Reel selection
   const handleSelectAnimeFromReel = (reel: any) => {
-    // 1. Check if we already have a loaded post matching by slug, ani_id, or original id
     const existingPost = posts.find((p) => 
       (reel.slug && p.slug === reel.slug) || 
       (reel.ani_id && p.ani_id === reel.ani_id) || 
@@ -654,7 +866,9 @@ export default function App() {
       setSelectedEpisodeForModal(null);
       setSelectedPhotoPost(existingPost);
     } else {
-      // 2. Build a complete compatible Post object on the fly using Reel data
+      const likedIds = getLikedAnimeIds();
+      const isLiked = likedIds.has(String(reel.originalId || reel.id)) || (reel.slug && likedIds.has(reel.slug)) || likedIds.has(reel.title);
+
       const postFromReel: Post = {
         id: reel.originalId ? String(reel.originalId) : reel.id,
         slug: reel.slug || undefined,
@@ -675,7 +889,7 @@ export default function App() {
         likesCount: 150,
         commentsCount: 2,
         sharesCount: 15,
-        isLikedByUser: false,
+        isLikedByUser: isLiked,
         commentsList: [
           {
             id: `${reel.id}-c1`,
@@ -700,22 +914,17 @@ export default function App() {
     setSelectedEpisodeForModal(null);
   }, []);
 
-  // Filter posts based on search query AND selected sidebar shortcut
+  // Filter posts based on search query
   const filteredPosts = posts.filter((post) => {
     const matchesSearch =
       post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       post.content.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesGenre = selectedGenre
-      ? post.genreTags.some((g) => g.toLowerCase() === selectedGenre.toLowerCase())
-      : true;
-
-    return matchesSearch && matchesGenre;
+    return matchesSearch;
   });
 
   return (
     <div className="min-h-screen bg-[#F0F2F5] text-gray-900 font-sans flex flex-col w-full overflow-x-hidden">
-      {/* Top Header Navigation (AniBook, Search, Avatar, Sidebar Toggle) */}
+      {/* Top Header Navigation (AniBook, Search, Avatar, Sidebar Toggle, Settings) */}
       <Header
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
@@ -723,6 +932,8 @@ export default function App() {
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         onLogoClick={() => handleTabChange("feed")}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onTabSelect={handleTabChange}
       />
 
       {/* Main Centered Content Layout */}
@@ -735,6 +946,10 @@ export default function App() {
           setSelectedGenre={setSelectedGenre}
           activeTab={activeTab}
           setActiveTab={handleTabChange}
+          likedCount={likedPosts.length}
+          reelSettings={reelSettings}
+          onUpdateReelSettings={handleUpdateReelSettings}
+          onOpenSettings={() => setIsSettingsModalOpen(true)}
           onRefreshFeed={handleShuffleFeed}
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
@@ -745,30 +960,91 @@ export default function App() {
           isSidebarOpen ? "lg:ml-72" : ""
         }`}>
           
-          {/* Stories reel */}
-          <Stories currentUser={currentUser} />
+          {/* Stories reel (hidden on Liked Anime view for focus) */}
+          {activeTab !== "liked" && <Stories currentUser={currentUser} />}
 
           {/* Create Post composer */}
-          <CreatePost
-            currentUser={currentUser}
-            onSubmitPost={handleCreatePostSubmit}
-          />
+          {activeTab === "feed" && (
+            <CreatePost
+              currentUser={currentUser}
+              onSubmitPost={handleCreatePostSubmit}
+            />
+          )}
 
-          {/* Quick Active Filter Pill indicator if selected */}
-          {selectedGenre && (
-            <div className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-2xl px-3.5 py-2 sm:px-4 sm:py-2.5 shadow-xs animate-fade-in min-w-0">
-              <div className="flex items-center gap-2 min-w-0">
-                <Sparkles className="h-4 w-4 text-[#1877F2] shrink-0 animate-pulse" />
-                <span className="text-xs font-semibold text-[#1877F2] truncate">
-                  Guild: <strong className="font-bold uppercase">{selectedGenre}</strong>
-                </span>
+          {/* Dedicated Liked Anime Header Banner */}
+          {activeTab === "liked" && (
+            <div className="bg-gradient-to-r from-rose-500 via-pink-600 to-purple-600 rounded-2xl p-4 sm:p-5 text-white shadow-md flex items-center justify-between min-w-0 animate-fade-in">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center text-white shrink-0 shadow-xs">
+                  <Heart className="w-5 h-5 fill-white text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h2 className="font-extrabold text-base sm:text-lg leading-tight truncate">
+                      My Liked Anime
+                    </h2>
+                    <span className="text-[10px] px-2 py-0.5 bg-white/25 rounded-full font-bold uppercase tracking-wider">
+                      {likedPosts.length} Saved
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-white/90 font-medium truncate">
+                    Saved in browser cookies · Persists across reloads
+                  </p>
+                </div>
               </div>
               <button
-                onClick={() => setSelectedGenre("")}
-                className="text-[11px] bg-white border border-blue-200 hover:bg-blue-100 text-blue-600 px-2.5 py-1 rounded-full font-bold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ml-2"
+                onClick={() => handleTabChange("feed")}
+                className="px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-bold rounded-xl backdrop-blur-xs transition-colors shrink-0 cursor-pointer"
               >
-                Clear
+                Back to Feed
               </button>
+            </div>
+          )}
+
+          {/* Active Genre Guild Banner with API Info & Random Switcher */}
+          {activeTab === "genre" && selectedGenre && (
+            <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 rounded-2xl p-3.5 sm:p-4 text-white shadow-md flex items-center justify-between min-w-0 animate-fade-in">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center text-lg shrink-0">
+                  {ALL_GENRES.find((g) => g.genre.toLowerCase() === selectedGenre.toLowerCase())?.emoji || "🎭"}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h2 className="font-extrabold text-sm sm:text-base capitalize leading-tight truncate">
+                      {selectedGenre} Anime
+                    </h2>
+                    <span className="text-[10px] px-2 py-0.5 bg-white/20 rounded-full font-bold uppercase tracking-wider">
+                      API Verified
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-white/80 font-medium truncate">
+                    Curated {selectedGenre} feed · Page {genrePage} of {genreTotalPages}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                <button
+                  onClick={() => {
+                    const available = ALL_GENRES.filter((g) => g.genre !== selectedGenre);
+                    const randomPick = available[Math.floor(Math.random() * available.length)] || ALL_GENRES[0];
+                    setSelectedGenre(randomPick.genre);
+                  }}
+                  className="px-2.5 py-1.5 bg-white/20 hover:bg-white/30 text-white text-[11px] font-bold rounded-lg backdrop-blur-xs transition-colors flex items-center gap-1 cursor-pointer"
+                  title="Generate another random genre"
+                >
+                  <Dices className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Random</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedGenre("");
+                    setActiveTab("feed");
+                  }}
+                  className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold rounded-lg transition-colors cursor-pointer"
+                >
+                  Clear
+                </button>
+              </div>
             </div>
           )}
 
@@ -784,14 +1060,47 @@ export default function App() {
             <FeedSkeleton count={3} />
           )}
 
+          {/* Empty State for Liked Anime tab */}
+          {activeTab === "liked" && likedPosts.length === 0 && !loading && (
+            <div className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm text-center flex flex-col items-center gap-3 animate-fade-in">
+              <div className="w-14 h-14 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-500 shadow-2xs">
+                <Heart className="w-7 h-7 fill-rose-500 text-rose-500 animate-pulse" />
+              </div>
+              <h3 className="font-bold text-gray-900 text-base sm:text-lg">No Liked Anime Yet</h3>
+              <p className="text-xs text-gray-500 max-w-sm leading-relaxed">
+                Browse through the Feed, Latest releases, or generated Genres and tap <strong>Like Anime</strong> on any card to save your favorite anime permanently in your cookies!
+              </p>
+              <div className="flex gap-2.5 mt-2">
+                <button
+                  onClick={() => handleTabChange("feed")}
+                  className="px-4 py-2 bg-[#1877F2] hover:bg-blue-600 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                >
+                  Explore Feed
+                </button>
+                <button
+                  onClick={() => {
+                    const randomGenre = ALL_GENRES[Math.floor(Math.random() * ALL_GENRES.length)].genre;
+                    setSelectedGenre(randomGenre);
+                    setActiveTab("genre");
+                  }}
+                  className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Dices className="w-3.5 h-3.5" />
+                  <span>Generate Genre</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Main Feed Cards stream with Facebook-style Reels carousel embedded */}
           {filteredPosts.length > 0 && (
             <div className="space-y-3.5 sm:space-y-4 flex flex-col w-full min-w-0" id="cards-stream-container">
               {filteredPosts.map((post, index) => {
-                // Symmetrical & pseudo-randomized placement based on gaps of 3, 5, 7 posts
-                const reelConfig = reelsPositions.find((p) => p.index === index);
-                const isReelsPosition = !!reelConfig;
-                const reelPageNumber = reelConfig ? reelConfig.page : 1;
+                // Check if single random reel card should be injected (e.g. every 5 items in Feed/Latest)
+                const isSingleReelPosition = 
+                  reelSettings.enabled && 
+                  (activeTab === "feed" || activeTab === "latest") && 
+                  (index + 1) % reelSettings.frequency === 0;
 
                 return (
                   <React.Fragment key={post.id}>
@@ -810,22 +1119,30 @@ export default function App() {
                         setSelectedPhotoPost(p);
                       }}
                     />
-                    {/* Embed Reels Section across feed pages with different reel batches */}
-                    {isReelsPosition && (
-                      <ReelsSection 
-                        key={`reels-feed-batch-${reelPageNumber}`}
-                        pageNumber={reelPageNumber}
+
+                    {/* Single Video Reel Discovery Card (Random page / 1-item stream video) */}
+                    {isSingleReelPosition && (
+                      <SingleReelFeedCard
+                        key={`single-reel-feed-card-${post.id}-${index}`}
+                        cardIndex={index}
+                        maxTotalPages={maxTotalPages}
+                        reelSettings={reelSettings}
                         currentUser={currentUser}
-                        title={reelPageNumber === 1 ? "Reels and short videos" : "Explore more anime reels"}
-                        onSelectAnime={handleSelectAnimeFromReel}
+                        onLikeToggle={handleLikeToggle}
+                        onAddComment={handleAddComment}
+                        onShare={handleShare}
+                        onWatchFull={(p) => {
+                          setSelectedEpisodeForModal(null);
+                          setSelectedPhotoPost(p);
+                        }}
                       />
                     )}
                   </React.Fragment>
                 );
               })}
 
-              {/* Fallback placement if less than 2 posts */}
-              {filteredPosts.length < 2 && filteredPosts.length > 0 && (
+              {/* Fallback placement if less than 2 posts in feed */}
+              {activeTab === "feed" && filteredPosts.length < 2 && filteredPosts.length > 0 && (
                 <ReelsSection 
                   key="reels-fallback-single"
                   pageNumber={1}
@@ -845,7 +1162,7 @@ export default function App() {
                 The anime API is temporarily unavailable. Please retry.
               </p>
               <button
-                onClick={() => fetchAnimeData(true)}
+                onClick={() => activeTab === "genre" ? fetchGenreData(selectedGenre, 1, true) : fetchAnimeData(true)}
                 className="h-9 px-4 bg-[#1877F2] hover:bg-blue-600 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
@@ -855,57 +1172,90 @@ export default function App() {
           )}
 
           {/* Infinite Scroll / Lazy Loading Sentinel Detector */}
-          <div
-            ref={sentinelRef}
-            className="w-full py-6 flex justify-center items-center select-none min-w-0"
-            id="lazy-load-sentinel"
-          >
-            {loading ? (
-              <div className="flex flex-col items-center gap-2 text-gray-500 text-xs font-semibold">
-                <RefreshCw className="h-6 w-6 text-[#1877F2] animate-spin" />
-                <span>Loading {activeTab === "feed" ? "random anime discoveries" : "more recent releases"}...</span>
-              </div>
-            ) : hasMore ? (
-              <div className="h-[2px] w-full bg-transparent" />
-            ) : (
-              <div className="text-center text-xs font-bold text-gray-400 py-4 uppercase tracking-wider">
-                🎉 You've reached the end of the recent anime feed!
-              </div>
-            )}
-          </div>
+          {activeTab !== "liked" && (
+            <div
+              ref={sentinelRef}
+              className="w-full py-6 flex justify-center items-center select-none min-w-0"
+              id="lazy-load-sentinel"
+            >
+              {loading ? (
+                <div className="flex flex-col items-center gap-2 text-gray-500 text-xs font-semibold">
+                  <RefreshCw className="h-6 w-6 text-[#1877F2] animate-spin" />
+                  <span>Loading {activeTab === "genre" ? `${selectedGenre} anime...` : activeTab === "feed" ? "random anime discoveries..." : "more releases..."}</span>
+                </div>
+              ) : hasMore ? (
+                <div className="h-[2px] w-full bg-transparent" />
+              ) : (
+                <div className="text-center text-xs font-bold text-gray-400 py-4 uppercase tracking-wider">
+                  🎉 You've reached the end of the {activeTab === "genre" ? `${selectedGenre} genre` : "recent"} anime feed!
+                </div>
+              )}
+            </div>
+          )}
         </main>
       </div>
 
       {/* Facebook Style Photo Lightbox Modal */}
-      {selectedPhotoPost && (
-        <FacebookPhotoModal
-          post={selectedPhotoPost}
-          allPosts={posts}
-          currentUser={currentUser}
-          onClose={handleClosePhotoModal}
-          onLikeToggle={handleLikeToggle}
-          onAddComment={handleAddComment}
-          onShare={handleShare}
-          onSelectPost={(post) => setSelectedPhotoPost(post)}
-          initialEpisode={selectedEpisodeForModal}
-        />
-      )}
+      <AnimatePresence>
+        {selectedPhotoPost && (
+          <FacebookPhotoModal
+            key="facebook-photo-modal"
+            post={selectedPhotoPost}
+            allPosts={posts}
+            currentUser={currentUser}
+            onClose={handleClosePhotoModal}
+            onLikeToggle={handleLikeToggle}
+            onAddComment={handleAddComment}
+            onShare={handleShare}
+            onSelectPost={(post) => setSelectedPhotoPost(post)}
+            initialEpisode={selectedEpisodeForModal}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Exit Confirmation Modal */}
-      <ExitConfirmModal
-        isOpen={showExitModal}
-        onClose={() => setShowExitModal(false)}
-        onConfirmExit={handleConfirmExit}
-      />
+      <AnimatePresence>
+        {showExitModal && (
+          <ExitConfirmModal
+            key="exit-confirm-modal"
+            isOpen={showExitModal}
+            onClose={() => setShowExitModal(false)}
+            onConfirmExit={handleConfirmExit}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Preferences & Reel Settings Modal */}
+      <AnimatePresence>
+        {isSettingsModalOpen && (
+          <SettingsModal
+            key="settings-modal"
+            isOpen={isSettingsModalOpen}
+            onClose={() => setIsSettingsModalOpen(false)}
+            reelSettings={reelSettings}
+            onUpdateReelSettings={handleUpdateReelSettings}
+            onRefreshFeed={handleShuffleFeed}
+            currentUser={currentUser}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Floating Micro Toast notification */}
-      {toastMessage && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-gray-900/95 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 border border-white/10 animate-slide-up text-xs font-semibold max-w-[90vw] truncate">
-          <div className="bg-blue-500 rounded-full w-4 h-4 flex items-center justify-center text-[10px] shrink-0">✨</div>
-          <span className="truncate">{toastMessage}</span>
-        </div>
-      )}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            key="toast-notification"
+            initial={{ opacity: 0, y: 20, x: "-50%" }}
+            animate={{ opacity: 1, y: 0, x: "-50%" }}
+            exit={{ opacity: 0, y: 15, x: "-50%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 350 }}
+            className="fixed bottom-4 left-1/2 z-50 bg-gray-900/95 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 border border-white/10 text-xs font-semibold max-w-[90vw] truncate"
+          >
+            <div className="bg-blue-500 rounded-full w-4 h-4 flex items-center justify-center text-[10px] shrink-0">✨</div>
+            <span className="truncate">{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
-

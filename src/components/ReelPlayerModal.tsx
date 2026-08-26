@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import videojs from "video.js";
 import "video.js/dist/video-js.css";
 import { 
@@ -20,6 +21,7 @@ import {
 import { ReelItem } from "./ReelsSection";
 
 interface ReelPlayerModalProps {
+  key?: React.Key;
   reels: ReelItem[];
   activeIndex: number;
   onIndexChange: (newIndex: number) => void;
@@ -54,14 +56,26 @@ interface StreamResponse {
 // Global in-memory cache for resolved stream responses so pre-fetched streams play instantly
 const streamCache = new Map<string, StreamResponse["data"]>();
 
-async function prefetchStream(slug: string) {
-  if (!slug || streamCache.has(slug)) return;
+async function prefetchStream(slug: string, malId?: string, aniId?: string, title?: string) {
+  const cacheKey = `${slug || ""}-${malId || ""}`;
+  if (!slug && !malId) return;
+  if (streamCache.has(cacheKey)) return;
   try {
-    const res = await fetch(`/api/stream?id=${encodeURIComponent(slug)}&server=hd-1&ep=1&type=sub`);
+    const params = new URLSearchParams({
+      id: slug || "",
+      malId: malId || "",
+      aniId: aniId || "",
+      title: title || "",
+      server: "auto",
+      ep: "1",
+      type: "sub"
+    });
+    const res = await fetch(`/api/stream?${params.toString()}`);
     if (res.ok) {
       const json: StreamResponse = await res.json();
       if (json.success && json.data?.m3u8) {
-        streamCache.set(slug, json.data);
+        streamCache.set(cacheKey, json.data);
+        if (slug) streamCache.set(slug, json.data);
       }
     }
   } catch {
@@ -180,7 +194,7 @@ export default function ReelPlayerModal({
     if (activeIndex + 1 < reels.length) {
       const nextItem = reels[activeIndex + 1];
       const nextSlug = nextItem.slug || (typeof nextItem.originalId === "string" ? nextItem.originalId : "") || nextItem.title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-      prefetchStream(nextSlug);
+      prefetchStream(nextSlug, nextItem.mal_id ? String(nextItem.mal_id) : undefined, nextItem.ani_id ? String(nextItem.ani_id) : undefined, nextItem.title);
     }
 
     // Load more reels if close to bottom
@@ -218,12 +232,20 @@ export default function ReelPlayerModal({
   const currentLikeCount = currentReel ? likeCounts[currentReel.id] || parseInt(currentReel.likes) || 120 : 120;
 
   return (
-    <div 
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.25 }}
       className="fixed inset-0 z-50 bg-black flex items-center justify-center p-0 sm:py-6 sm:px-4 lg:py-8 lg:px-6 select-none h-screen h-dvh w-screen overflow-hidden"
       onClick={onClose}
       id="fullscreen-reels-lineup-modal"
     >
-      <div 
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.94 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.94 }}
+        transition={{ type: "spring", damping: 28, stiffness: 320 }}
         className="relative w-full h-full max-w-md sm:max-w-lg lg:max-w-xl sm:h-[92vh] sm:rounded-2xl lg:rounded-3xl bg-black overflow-hidden shadow-2xl flex flex-col border-x sm:border border-white/10"
         onClick={(e) => e.stopPropagation()}
       >
@@ -327,75 +349,81 @@ export default function ReelPlayerModal({
         </div>
 
         {/* Sliding Comments Drawer */}
-        {isCommentsOpen && currentReel && (
-          <div 
-            className="absolute inset-x-0 bottom-0 top-1/3 z-50 bg-gray-950/95 backdrop-blur-md border-t border-white/15 p-4 flex flex-col animate-slide-up rounded-t-3xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <span className="font-bold text-white text-sm">
-                Comments ({comments.length + 18})
-              </span>
-              <button
-                onClick={() => setIsCommentsOpen(false)}
-                className="p-1 rounded-full text-gray-400 hover:text-white cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Comment list */}
-            <div className="flex-1 overflow-y-auto py-3 space-y-3">
-              <div className="flex gap-2.5 items-start">
-                <img
-                  src="https://api.dicebear.com/9.x/adventurer/svg?seed=SakuraOtaku&backgroundColor=ffb703"
-                  alt="User"
-                  className="w-7 h-7 rounded-full object-cover border border-white/10"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = "https://api.dicebear.com/9.x/bottts/svg?seed=SakuraOtaku";
-                  }}
-                />
-                <div className="bg-white/10 rounded-2xl px-3 py-2 text-xs text-white flex-1">
-                  <span className="font-bold block text-blue-400">SakuraOtaku</span>
-                  Streaming middle highlight in HD quality! 🔥
-                </div>
+        <AnimatePresence>
+          {isCommentsOpen && currentReel && (
+            <motion.div 
+              initial={{ y: "100%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0 }}
+              transition={{ type: "spring", damping: 26, stiffness: 320 }}
+              className="absolute inset-x-0 bottom-0 top-1/3 z-50 bg-gray-950/95 backdrop-blur-md border-t border-white/15 p-4 flex flex-col rounded-t-3xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                <span className="font-bold text-white text-sm">
+                  Comments ({comments.length + 18})
+                </span>
+                <button
+                  onClick={() => setIsCommentsOpen(false)}
+                  className="p-1 rounded-full text-gray-400 hover:text-white cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
 
-              {comments.map((cmt) => (
-                <div key={cmt.id} className="flex gap-2.5 items-start">
+              {/* Comment list */}
+              <div className="flex-1 overflow-y-auto py-3 space-y-3">
+                <div className="flex gap-2.5 items-start">
                   <img
-                    src={currentUser.avatar}
-                    alt={cmt.author}
-                    className="w-7 h-7 rounded-full object-cover"
+                    src="https://api.dicebear.com/9.x/adventurer/svg?seed=SakuraOtaku&backgroundColor=ffb703"
+                    alt="User"
+                    className="w-7 h-7 rounded-full object-cover border border-white/10"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = "https://api.dicebear.com/9.x/bottts/svg?seed=SakuraOtaku";
+                    }}
                   />
                   <div className="bg-white/10 rounded-2xl px-3 py-2 text-xs text-white flex-1">
-                    <span className="font-bold block text-blue-400">{cmt.author}</span>
-                    {cmt.text}
+                    <span className="font-bold block text-blue-400">SakuraOtaku</span>
+                    Streaming middle highlight in HD quality! 🔥
                   </div>
                 </div>
-              ))}
-            </div>
 
-            {/* New comment input */}
-            <form onSubmit={handleCommentSubmit} className="flex items-center gap-2 pt-2 border-t border-white/10">
-              <input
-                type="text"
-                value={commentInput}
-                onChange={(e) => setCommentInput(e.target.value)}
-                placeholder="Add a comment on this anime reel..."
-                className="flex-1 bg-white/10 text-white rounded-full px-4 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
-              />
-              <button
-                type="submit"
-                className="px-3.5 py-2 bg-[#1877F2] hover:bg-[#166FE5] text-white text-xs font-bold rounded-full transition-colors cursor-pointer"
-              >
-                Post
-              </button>
-            </form>
-          </div>
-        )}
-      </div>
-    </div>
+                {comments.map((cmt) => (
+                  <div key={cmt.id} className="flex gap-2.5 items-start">
+                    <img
+                      src={currentUser.avatar}
+                      alt={cmt.author}
+                      className="w-7 h-7 rounded-full object-cover"
+                    />
+                    <div className="bg-white/10 rounded-2xl px-3 py-2 text-xs text-white flex-1">
+                      <span className="font-bold block text-blue-400">{cmt.author}</span>
+                      {cmt.text}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* New comment input */}
+              <form onSubmit={handleCommentSubmit} className="flex items-center gap-2 pt-2 border-t border-white/10">
+                <input
+                  type="text"
+                  value={commentInput}
+                  onChange={(e) => setCommentInput(e.target.value)}
+                  placeholder="Add a comment on this anime reel..."
+                  className="flex-1 bg-white/10 text-white rounded-full px-4 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                />
+                <button
+                  type="submit"
+                  className="px-3.5 py-2 bg-[#1877F2] hover:bg-[#166FE5] text-white text-xs font-bold rounded-full transition-colors cursor-pointer"
+                >
+                  Post
+                </button>
+              </form>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -506,9 +534,10 @@ function SingleReelCard({
     isSeekingRef.current = false;
 
     async function loadStream() {
+      const cacheKey = `${effectiveSlug || ""}-${reel.mal_id || ""}`;
       // Check in-memory cache first
-      if (streamCache.has(effectiveSlug)) {
-        const cachedResponse = streamCache.get(effectiveSlug);
+      if (streamCache.has(cacheKey) || streamCache.has(effectiveSlug)) {
+        const cachedResponse = streamCache.get(cacheKey) || streamCache.get(effectiveSlug);
         if (cachedResponse && !isCancelled) {
           setStreamData(cachedResponse);
           setLoadingStream(false);
@@ -517,18 +546,29 @@ function SingleReelCard({
       }
 
       try {
-        const res = await fetch(`/api/stream?id=${encodeURIComponent(effectiveSlug)}&server=hd-1&ep=1&type=sub`);
+        const params = new URLSearchParams({
+          id: effectiveSlug || "",
+          malId: reel.mal_id ? String(reel.mal_id) : "",
+          aniId: reel.ani_id ? String(reel.ani_id) : "",
+          title: reel.title || "",
+          server: "auto",
+          ep: "1",
+          type: "sub"
+        });
+
+        const res = await fetch(`/api/stream?${params.toString()}`);
         if (!res.ok) throw new Error(`Stream API responded with status ${res.status}`);
         const json: StreamResponse = await res.json();
 
         if (isCancelled) return;
 
         if (json.success && json.data?.m3u8) {
-          streamCache.set(effectiveSlug, json.data);
+          streamCache.set(cacheKey, json.data);
+          if (effectiveSlug) streamCache.set(effectiveSlug, json.data);
           setStreamData(json.data);
           setStreamError(null);
         } else {
-          throw new Error(json.error || "Stream unavailable for HD-1");
+          throw new Error(json.error || "Stream unavailable across servers");
         }
       } catch (err: any) {
         if (!isCancelled) {
@@ -548,7 +588,7 @@ function SingleReelCard({
       isCancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isNearby, effectiveSlug, index]);
+  }, [isNearby, effectiveSlug, index, reel.mal_id, reel.ani_id, reel.title]);
 
   // Mount Video.js player when stream data is ready (supports prefetching nearby items)
   useEffect(() => {

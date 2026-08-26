@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { AnimatePresence } from "motion/react";
 import { 
   Film, 
   ChevronLeft, 
@@ -289,22 +290,25 @@ export default function ReelsSection({
       </div>
 
       {/* Video.js M3U8 Stream Fullscreen Reel Viewer Modal */}
-      {modalQueue !== null && modalQueue.length > 0 && (
-        <ReelPlayerModal
-          reels={modalQueue}
-          activeIndex={modalActiveIndex}
-          onIndexChange={setModalActiveIndex}
-          currentUser={currentUser}
-          onClose={() => setModalQueue(null)}
-          onFetchMoreReels={fetchReelsBatch}
-          likedReels={likedReels}
-          likeCounts={likeCounts}
-          onToggleLike={handleToggleLikeReel}
-          activeComments={activeComments}
-          onAddComment={handleAddReelComment}
-          onWatchFull={onSelectAnime}
-        />
-      )}
+      <AnimatePresence>
+        {modalQueue !== null && modalQueue.length > 0 && (
+          <ReelPlayerModal
+            key="reel-player-fullscreen-modal"
+            reels={modalQueue}
+            activeIndex={modalActiveIndex}
+            onIndexChange={setModalActiveIndex}
+            currentUser={currentUser}
+            onClose={() => setModalQueue(null)}
+            onFetchMoreReels={fetchReelsBatch}
+            likedReels={likedReels}
+            likeCounts={likeCounts}
+            onToggleLike={handleToggleLikeReel}
+            activeComments={activeComments}
+            onAddComment={handleAddReelComment}
+            onWatchFull={onSelectAnime}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 }

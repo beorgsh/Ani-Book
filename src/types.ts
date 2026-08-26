@@ -73,6 +73,7 @@ export interface Post {
   id: string; // can be number as string, or custom uuid
   slug?: string;
   title: string;
+  japaneseTitle?: string;
   avatar: string;
   isVerified?: boolean;
   timestamp: string;
@@ -86,6 +87,8 @@ export interface Post {
   genreTags?: string[];
   studio?: string;
   isCustom?: boolean; // True if created by current user
+  isGenre?: boolean; // True if from genre feed
+  rating?: string;
   likesCount: number;
   commentsCount: number;
   sharesCount: number;

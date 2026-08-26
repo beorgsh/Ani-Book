@@ -24,6 +24,7 @@ import M3U8VideoPlayer from "./M3U8VideoPlayer";
 import { getDeterministicAvatar } from "../utils";
 
 interface FacebookPhotoModalProps {
+  key?: React.Key;
   post: Post;
   allPosts: Post[];
   currentUser: { name: string; avatar: string };
@@ -228,6 +229,7 @@ export default function FacebookPhotoModal({
                   episode={selectedEpisode}
                   animeTitle={post.title}
                   aniId={post.ani_id}
+                  malId={post.mal_id}
                   slug={post.slug}
                   poster={imageUrl}
                   onBackToImage={() => setSelectedEpisode(null)}
