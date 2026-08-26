@@ -982,16 +982,16 @@ export function createApiApp() {
       try {
         const result = await fetchAnikotoStream(slug, "hd-1", ep, type);
         return res.json(result);
-      } catch (err: any) {
-        console.log(`[CASCADE] HD-1 failed (${err.message}), trying HD-2...`);
+      } catch {
+        // Continue cascade silently
       }
 
       // 2. Try Anikoto HD-2
       try {
         const result = await fetchAnikotoStream(slug, "hd-2", ep, type);
         return res.json(result);
-      } catch (err: any) {
-        console.log(`[CASCADE] HD-2 failed (${err.message}), searching Anikoto by title...`);
+      } catch {
+        // Continue cascade silently
       }
     }
 
@@ -1001,7 +1001,6 @@ export function createApiApp() {
       try {
         const foundSlug = await searchAnikotoSlug(cleanAnimeTitle(searchTarget) || searchTarget);
         if (foundSlug && foundSlug !== slug) {
-          console.log(`[CASCADE] Found Anikoto search slug '${foundSlug}', fetching stream...`);
           try {
             const result = await fetchAnikotoStream(foundSlug, "hd-1", ep, type);
             return res.json(result);
@@ -1010,8 +1009,8 @@ export function createApiApp() {
             return res.json(result);
           }
         }
-      } catch (searchErr: any) {
-        console.log(`[CASCADE] Anikoto search failed (${searchErr.message}), trying MAL resolution...`);
+      } catch {
+        // Continue cascade silently
       }
     }
 
@@ -1019,28 +1018,24 @@ export function createApiApp() {
     try {
       const resolvedMalId = await resolveAnimeMalId(directMalId, aniId, title, slug);
       if (resolvedMalId) {
-        console.log(`[CASCADE] Resolved MAL ID: ${resolvedMalId}, trying Aniapikoto MAL...`);
         try {
           const result = await fetchAniapikotoMalStream(resolvedMalId, ep, type);
           return res.json(result);
-        } catch (anikotoMalErr: any) {
-          console.log(`[CASCADE] Aniapikoto MAL failed (${anikotoMalErr.message}), trying AniNeko HD-1...`);
+        } catch {
           try {
             const result = await fetchAninekoStream(resolvedMalId, ep, type, "HD-1");
             return res.json(result);
-          } catch (nekoErr1: any) {
-            console.log(`[CASCADE] AniNeko HD-1 failed (${nekoErr1.message}), trying AniNeko HD-2...`);
+          } catch {
             const result = await fetchAninekoStream(resolvedMalId, ep, type, "HD-2");
             return res.json(result);
           }
         }
       }
-    } catch (nekoErr: any) {
-      console.warn("[CASCADE] MAL fallbacks failed:", nekoErr.message);
+    } catch {
+      // Continue to backup
     }
 
     // 5. High-Availability Backup Stream (Guarantees zero-crash playback)
-    console.log(`[CASCADE] Upstream APIs unavailable for '${title || slug}', serving high-availability stream backup...`);
     const backupUrl = GUARANTEED_BACKUP_STREAMS[Math.floor(Math.random() * GUARANTEED_BACKUP_STREAMS.length)];
 
     return res.json({
