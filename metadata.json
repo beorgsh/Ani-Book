@@ -1,0 +1,8 @@
+{
+  "name": "Remix AniBook",
+  "description": "AniBook - Facebook style social network for anime fans with toggleable sidebar, centered feed, lazy loading, and landscape banners.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
